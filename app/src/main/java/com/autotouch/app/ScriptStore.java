@@ -25,15 +25,15 @@ public final class ScriptStore {
     public static String defaultScript(String key) {
         switch (key) {
             case LEVEL:
-                return "-- Auto Level script\n-- Add your own touch logic here\nwait(1000)";
+                return "-- Auto Level starter\n-- Needs more HUD/NPC calibration screenshots\nwait(1000)";
             case QUEST:
-                return "-- Auto Quest script\nwait(1000)";
+                return "-- Auto Quest starter\n-- Needs quest-menu calibration screenshots\nwait(1000)";
             case CHEST:
-                return "-- Auto Money / Chest script\nwait(1000)";
+                return "-- Money / Chest starter for the HUD you sent\n-- Moves forward in short bursts so Start causes a real in-game action\nrepeat(6)\nswipe_pct(10,88,10,78,300)\nwait(250)\nend";
             case FRUIT_FARM:
-                return "-- Auto Fruit Farm script\nwait(1000)";
+                return "-- Fruit Farm starter\n-- Needs fruit-screen calibration screenshots\nwait(1000)";
             case BUY_FRUIT:
-                return "-- Auto Buy Fruit script\nwait(1000)";
+                return "-- Buy Fruit starter\n-- Needs shop-menu calibration screenshots\nwait(1000)";
             default:
                 return "wait(1000)";
         }
