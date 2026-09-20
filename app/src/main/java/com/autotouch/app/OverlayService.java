@@ -24,7 +24,7 @@ public final class OverlayService extends Service {
     private WindowManager windowManager;
     private View panel;
     private TextView state;
-    private boolean running;
+    private AutomationRunner runner;
 
     @Override public void onCreate() {
         super.onCreate();
@@ -46,6 +46,9 @@ public final class OverlayService extends Service {
                 .build();
 
         startForeground(7, notification);
+        runner = new AutomationRunner(this, text -> {
+            if (state != null) state.setText(text);
+        });
         showOverlay();
     }
 
@@ -73,17 +76,12 @@ public final class OverlayService extends Service {
                 Toast.makeText(this, "Turn on at least one automation toggle first", Toast.LENGTH_SHORT).show();
                 return;
             }
-            running = true;
-            state.setText("Running • " + current.enabledCount());
-            Toast.makeText(this, current.enabledSummary(), Toast.LENGTH_SHORT).show();
+            runner.start();
         });
 
         Button stop = new Button(this);
         stop.setText("Stop");
-        stop.setOnClickListener(v -> {
-            running = false;
-            state.setText("Stopped");
-        });
+        stop.setOnClickListener(v -> runner.stop());
 
         box.addView(state);
         box.addView(play);
@@ -143,7 +141,7 @@ public final class OverlayService extends Service {
     }
 
     @Override public void onDestroy() {
-        running = false;
+        if (runner != null) runner.stop();
         if (panel != null) windowManager.removeView(panel);
         stopForeground(STOP_FOREGROUND_REMOVE);
         super.onDestroy();
