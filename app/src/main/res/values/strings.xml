@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">AutoTouch</string>
+    <string name="accessibility_description">Performs only the taps and swipes in the routine you configure. AutoTouch never reads screen content.</string>
+</resources>
