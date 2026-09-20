@@ -27,6 +27,10 @@ public final class AutomationRunner {
 
     public void start() {
         stop();
+        if (AutoTouchAccessibilityService.instance() == null) {
+            listener.onStatus("Accessibility off");
+            return;
+        }
         running = true;
         moduleIndex = 0;
         listener.onStatus("Starting");
@@ -42,6 +46,12 @@ public final class AutomationRunner {
 
     private void nextCycle() {
         if (!running) return;
+
+        if (AutoTouchAccessibilityService.instance() == null) {
+            listener.onStatus("Accessibility off");
+            stop();
+            return;
+        }
 
         AutomationConfig config = AutomationConfig.load(context);
         List<String> modules = enabledModules(config);
@@ -63,11 +73,12 @@ public final class AutomationRunner {
             return;
         }
 
+        String script = ScriptStore.load(context, module);
         listener.onStatus(displayName(module));
-        engine.run(ScriptStore.load(context, module), error -> {
+        engine.run(script, error -> {
             if (!running) return;
             if (error != null) {
-                listener.onStatus("Script error");
+                listener.onStatus(error);
                 handler.postDelayed(this::nextCycle, 1000);
                 return;
             }
@@ -78,6 +89,10 @@ public final class AutomationRunner {
 
     public void runOnce(String module, Listener oneShotListener) {
         engine.cancel();
+        if (AutoTouchAccessibilityService.instance() == null) {
+            oneShotListener.onStatus("Accessibility off");
+            return;
+        }
         oneShotListener.onStatus("Running " + displayName(module));
         engine.run(ScriptStore.load(context, module), error -> {
             if (error == null) oneShotListener.onStatus("Done");
