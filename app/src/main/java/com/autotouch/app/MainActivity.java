@@ -11,10 +11,12 @@ import android.os.Bundle;
 import android.provider.Settings;
 import android.view.Gravity;
 import android.view.View;
+import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
+import android.widget.Spinner;
 import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -22,13 +24,17 @@ import android.widget.Toast;
 public final class MainActivity extends Activity {
     private LinearLayout root;
     private TextView status;
-    private Switch autoLevel;
-    private Switch autoQuest;
-    private Switch autoChest;
-    private Switch autoFruitFarm;
-    private Switch autoBuyFruit;
-    private EditText fruitInterval;
-    private EditText loopDelay;
+    private Switch autoLevel, autoQuest, autoChest, autoFruitFarm, autoBuyFruit;
+    private EditText fruitInterval, loopDelay;
+    private Spinner scriptModule;
+    private EditText scriptEditor;
+    private final String[] scriptKeys = {
+            ScriptStore.LEVEL,
+            ScriptStore.QUEST,
+            ScriptStore.CHEST,
+            ScriptStore.FRUIT_FARM,
+            ScriptStore.BUY_FRUIT
+    };
 
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
@@ -40,9 +46,8 @@ public final class MainActivity extends Activity {
         root.setBackgroundColor(Color.rgb(247, 242, 250));
         scroll.addView(root);
 
-        TextView title = text("AutoTouch", 31, true);
-        root.addView(title);
-        root.addView(text("Feature-based automation controls", 15, false));
+        root.addView(text("AutoTouch", 31, true));
+        root.addView(text("Feature toggles + Lua-like touch scripts", 15, false));
 
         status = text("", 14, false);
         status.setPadding(0, dp(14), 0, dp(10));
@@ -56,11 +61,11 @@ public final class MainActivity extends Activity {
         root.addView(section("Automation"));
         AutomationConfig config = AutomationConfig.load(this);
 
-        autoLevel = toggle("Auto Level", "Run the leveling module", config.autoLevel);
-        autoQuest = toggle("Auto Quest", "Handle quest flow when the module is active", config.autoQuest);
-        autoChest = toggle("Auto Money / Chest Farm", "Run the money and chest module", config.autoChest);
-        autoFruitFarm = toggle("Auto Fruit Farm", "Run the fruit farming module", config.autoFruitFarm);
-        autoBuyFruit = toggle("Auto Buy Fruit", "Enable the timed fruit-buy module", config.autoBuyFruit);
+        autoLevel = toggle("Auto Level", "Runs the Auto Level script", config.autoLevel);
+        autoQuest = toggle("Auto Quest", "Runs the Auto Quest script", config.autoQuest);
+        autoChest = toggle("Auto Money / Chest Farm", "Runs the Money / Chest script", config.autoChest);
+        autoFruitFarm = toggle("Auto Fruit Farm", "Runs the Fruit Farm script", config.autoFruitFarm);
+        autoBuyFruit = toggle("Auto Buy Fruit", "Runs its script only when the timer is due", config.autoBuyFruit);
 
         root.addView(autoLevel);
         root.addView(autoQuest);
@@ -70,18 +75,41 @@ public final class MainActivity extends Activity {
 
         root.addView(section("Timers"));
         fruitInterval = labeledNumberField("Buy fruit every (minutes)", config.buyFruitIntervalMinutes);
-        loopDelay = labeledNumberField("Delay between module checks (ms)", config.loopDelayMs);
+        loopDelay = labeledNumberField("Delay between module cycles (ms)", config.loopDelayMs);
+
+        root.addView(section("Advanced scripts"));
+        root.addView(text("These scripts run through Android accessibility. They are not injected into Roblox.", 13, false));
+
+        scriptModule = new Spinner(this);
+        scriptModule.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item,
+                new String[]{"Auto Level", "Auto Quest", "Money / Chest", "Fruit Farm", "Buy Fruit"}));
+        root.addView(scriptModule);
+
+        scriptEditor = new EditText(this);
+        scriptEditor.setMinLines(10);
+        scriptEditor.setGravity(Gravity.TOP | Gravity.START);
+        scriptEditor.setTextSize(14);
+        scriptEditor.setTypeface(android.graphics.Typeface.MONOSPACE);
+        scriptEditor.setHorizontallyScrolling(true);
+        root.addView(scriptEditor);
+
+        root.addView(text("Commands: tap(x,y), tap_pct(x,y), swipe(...), swipe_pct(...), wait(ms), repeat(n) ... end", 12, false));
+
+        LinearLayout scriptButtons = new LinearLayout(this);
+        scriptButtons.setOrientation(LinearLayout.HORIZONTAL);
+        Button load = button("LOAD", v -> loadSelectedScript());
+        Button saveScript = button("SAVE SCRIPT", v -> saveSelectedScript());
+        scriptButtons.addView(load);
+        scriptButtons.addView(saveScript);
+        root.addView(scriptButtons);
 
         root.addView(section("Controller"));
         root.addView(button("SAVE SETTINGS", v -> saveConfig()));
         root.addView(button("START FLOATING CONTROLLER", v -> startController()));
         root.addView(button("STOP", v -> stopController()));
 
-        TextView note = text("No raw X/Y macro fields on the main screen.", 13, false);
-        note.setPadding(0, dp(14), 0, 0);
-        root.addView(note);
-
         setContentView(scroll);
+        loadSelectedScript();
 
         if (Build.VERSION.SDK_INT >= 33 &&
                 checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
@@ -93,6 +121,15 @@ public final class MainActivity extends Activity {
     @Override protected void onResume() {
         super.onResume();
         refreshStatus();
+    }
+
+    private void loadSelectedScript() {
+        scriptEditor.setText(ScriptStore.load(this, scriptKeys[scriptModule.getSelectedItemPosition()]));
+    }
+
+    private void saveSelectedScript() {
+        ScriptStore.save(this, scriptKeys[scriptModule.getSelectedItemPosition()], scriptEditor.getText().toString());
+        Toast.makeText(this, "Script saved", Toast.LENGTH_SHORT).show();
     }
 
     private void refreshStatus() {
