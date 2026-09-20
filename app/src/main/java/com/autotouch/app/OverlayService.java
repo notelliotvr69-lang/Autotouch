@@ -72,6 +72,11 @@ public final class OverlayService extends Service {
             state.setText("No modules");
             return;
         }
+        if (AutoTouchAccessibilityService.instance() == null) {
+            Toast.makeText(this, "Accessibility service is not connected", Toast.LENGTH_LONG).show();
+            state.setText("Accessibility off");
+            return;
+        }
         automationRunning = true;
         state.setText("Starting");
         runner.start();
@@ -86,6 +91,24 @@ public final class OverlayService extends Service {
     private void toggleAutomation() {
         if (automationRunning) stopAutomation();
         else startAutomation();
+    }
+
+    private void testTouch() {
+        AutoTouchAccessibilityService service = AutoTouchAccessibilityService.instance();
+        if (service == null) {
+            state.setText("Accessibility off");
+            Toast.makeText(this, "Enable AutoTouch accessibility first", Toast.LENGTH_LONG).show();
+            return;
+        }
+        state.setText("Testing touch");
+        int width = getResources().getDisplayMetrics().widthPixels;
+        int height = getResources().getDisplayMetrics().heightPixels;
+        int x = Math.round(width * 0.095f);
+        int y = Math.round(height * 0.673f);
+        service.tap(x, y, () -> {
+            state.setText("Test sent");
+            Toast.makeText(this, "Test tap sent to the Menu button position", Toast.LENGTH_SHORT).show();
+        });
     }
 
     private void showOverlay() {
@@ -113,9 +136,14 @@ public final class OverlayService extends Service {
         stop.setText("Stop");
         stop.setOnClickListener(v -> stopAutomation());
 
+        Button test = new Button(this);
+        test.setText("Test");
+        test.setOnClickListener(v -> testTouch());
+
         box.addView(state);
         box.addView(play);
         box.addView(stop);
+        box.addView(test);
         panel = box;
 
         int type = Build.VERSION.SDK_INT >= 26
