@@ -99,8 +99,10 @@ public final class MainActivity extends Activity {
         scriptButtons.setOrientation(LinearLayout.HORIZONTAL);
         Button load = button("LOAD", v -> loadSelectedScript());
         Button saveScript = button("SAVE SCRIPT", v -> saveSelectedScript());
+        Button runScript = button("RUN SCRIPT", v -> runSelectedScript());
         scriptButtons.addView(load);
         scriptButtons.addView(saveScript);
+        scriptButtons.addView(runScript);
         root.addView(scriptButtons);
 
         root.addView(section("Controller"));
@@ -130,6 +132,22 @@ public final class MainActivity extends Activity {
     private void saveSelectedScript() {
         ScriptStore.save(this, scriptKeys[scriptModule.getSelectedItemPosition()], scriptEditor.getText().toString());
         Toast.makeText(this, "Script saved", Toast.LENGTH_SHORT).show();
+    }
+
+    private void runSelectedScript() {
+        saveSelectedScript();
+        AutomationRunner oneShot = new AutomationRunner(this, message ->
+                runOnUiThread(() -> {
+                    status.setText(message);
+                    Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
+                })
+        );
+        oneShot.runOnce(scriptKeys[scriptModule.getSelectedItemPosition()], message ->
+                runOnUiThread(() -> {
+                    status.setText(message);
+                    Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
+                })
+        );
     }
 
     private void refreshStatus() {
