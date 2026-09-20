@@ -20,11 +20,14 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 public final class OverlayService extends Service {
+    public static final String ACTION_SHOW = "com.autotouch.app.SHOW_CONTROLLER";
     private static final String CHANNEL = "autotouch_controller";
+
     private WindowManager windowManager;
     private View panel;
     private TextView state;
     private AutomationRunner runner;
+    private boolean automationRunning;
 
     @Override public void onCreate() {
         super.onCreate();
@@ -46,10 +49,43 @@ public final class OverlayService extends Service {
                 .build();
 
         startForeground(7, notification);
+
         runner = new AutomationRunner(this, text -> {
             if (state != null) state.setText(text);
         });
+
         showOverlay();
+    }
+
+    @Override public int onStartCommand(Intent intent, int flags, int startId) {
+        if (state != null && !automationRunning) {
+            AutomationConfig config = AutomationConfig.load(this);
+            state.setText(config.enabledCount() + " enabled");
+        }
+        return START_STICKY;
+    }
+
+    private void startAutomation() {
+        AutomationConfig current = AutomationConfig.load(this);
+        if (current.enabledCount() == 0) {
+            Toast.makeText(this, "Turn on at least one automation toggle first", Toast.LENGTH_SHORT).show();
+            state.setText("No modules");
+            return;
+        }
+        automationRunning = true;
+        state.setText("Starting");
+        runner.start();
+    }
+
+    private void stopAutomation() {
+        automationRunning = false;
+        runner.stop();
+        state.setText("Stopped");
+    }
+
+    private void toggleAutomation() {
+        if (automationRunning) stopAutomation();
+        else startAutomation();
     }
 
     private void showOverlay() {
@@ -66,22 +102,16 @@ public final class OverlayService extends Service {
         state = new TextView(this);
         state.setText(config.enabledCount() + " enabled");
         state.setTextColor(Color.WHITE);
-        state.setPadding(0, 0, dp(6), 0);
+        state.setTextSize(15);
+        state.setPadding(dp(8), dp(8), dp(10), dp(8));
 
         Button play = new Button(this);
         play.setText("Start");
-        play.setOnClickListener(v -> {
-            AutomationConfig current = AutomationConfig.load(this);
-            if (current.enabledCount() == 0) {
-                Toast.makeText(this, "Turn on at least one automation toggle first", Toast.LENGTH_SHORT).show();
-                return;
-            }
-            runner.start();
-        });
+        play.setOnClickListener(v -> startAutomation());
 
         Button stop = new Button(this);
         stop.setText("Stop");
-        stop.setOnClickListener(v -> runner.stop());
+        stop.setOnClickListener(v -> stopAutomation());
 
         box.addView(state);
         box.addView(play);
@@ -107,22 +137,34 @@ public final class OverlayService extends Service {
         state.setOnTouchListener(new View.OnTouchListener() {
             int initialX, initialY;
             float initialTouchX, initialTouchY;
+            boolean moved;
 
             @Override public boolean onTouch(View v, MotionEvent e) {
-                if (e.getAction() == MotionEvent.ACTION_DOWN) {
-                    initialX = params.x;
-                    initialY = params.y;
-                    initialTouchX = e.getRawX();
-                    initialTouchY = e.getRawY();
-                    return true;
+                switch (e.getAction()) {
+                    case MotionEvent.ACTION_DOWN:
+                        initialX = params.x;
+                        initialY = params.y;
+                        initialTouchX = e.getRawX();
+                        initialTouchY = e.getRawY();
+                        moved = false;
+                        return true;
+
+                    case MotionEvent.ACTION_MOVE:
+                        float dx = e.getRawX() - initialTouchX;
+                        float dy = e.getRawY() - initialTouchY;
+                        if (Math.abs(dx) > dp(6) || Math.abs(dy) > dp(6)) moved = true;
+                        params.x = initialX + (int) dx;
+                        params.y = initialY + (int) dy;
+                        windowManager.updateViewLayout(box, params);
+                        return true;
+
+                    case MotionEvent.ACTION_UP:
+                        if (!moved) toggleAutomation();
+                        return true;
+
+                    default:
+                        return false;
                 }
-                if (e.getAction() == MotionEvent.ACTION_MOVE) {
-                    params.x = initialX + (int) (e.getRawX() - initialTouchX);
-                    params.y = initialY + (int) (e.getRawY() - initialTouchY);
-                    windowManager.updateViewLayout(box, params);
-                    return true;
-                }
-                return false;
             }
         });
 
