@@ -36,10 +36,11 @@ jobs:
           yes | "$SDKMANAGER" --licenses >/dev/null || true
           "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0"
 
-      - name: Download MediaPipe pose model
+      - name: Download MediaPipe pose models
         run: |
           mkdir -p app/src/main/assets
           curl -L --fail             https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task             -o app/src/main/assets/pose_landmarker_lite.task
+          curl -L --fail             https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task             -o app/src/main/assets/pose_landmarker_full.task
 
       - name: Build debug APK
         run: gradle --no-daemon assembleDebug
