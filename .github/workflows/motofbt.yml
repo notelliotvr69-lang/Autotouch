@@ -1,0 +1,50 @@
+name: MotoFBT APK
+
+on:
+  push:
+    branches:
+      - motofbt-prototype
+    paths:
+      - 'motofbt/**'
+      - '.github/workflows/motofbt.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: motofbt
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Install Android SDK packages
+        run: |
+          SDKMANAGER=/usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Download MediaPipe pose model
+        run: |
+          mkdir -p app/src/main/assets
+          curl -L --fail             https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task             -o app/src/main/assets/pose_landmarker_lite.task
+
+      - name: Build debug APK
+        run: gradle --no-daemon assembleDebug
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MotoFBT-debug-apk
+          path: motofbt/app/build/outputs/apk/debug/app-debug.apk
