@@ -42,6 +42,8 @@ public final class MainActivity extends AppCompatActivity implements PoseProcess
     private Spinner qualitySpinner;
     private Spinner smoothingSpinner;
     private CheckBox floorLock;
+    private CheckBox bodyTurning;
+    private CheckBox reverseTurning;
     private Button streamButton;
     private Button cameraButton;
 
@@ -59,6 +61,8 @@ public final class MainActivity extends AppCompatActivity implements PoseProcess
     private volatile int trackingMode = TrackerMapper.MODE_3;
     private volatile int smoothingMode = TrackerMapper.SMOOTH_BALANCED;
     private volatile boolean floorLockEnabled = true;
+    private volatile boolean bodyTurningEnabled = true;
+    private volatile boolean reverseTurningEnabled = false;
     private volatile int qualityMode = PoseProcessor.QUALITY_BALANCED;
 
     private long fpsWindowStart = 0L;
@@ -79,6 +83,8 @@ public final class MainActivity extends AppCompatActivity implements PoseProcess
         qualitySpinner = findViewById(R.id.qualitySpinner);
         smoothingSpinner = findViewById(R.id.smoothingSpinner);
         floorLock = findViewById(R.id.floorLock);
+        bodyTurning = findViewById(R.id.bodyTurning);
+        reverseTurning = findViewById(R.id.reverseTurning);
         streamButton = findViewById(R.id.streamButton);
         cameraButton = findViewById(R.id.cameraButton);
         Button calibrateButton = findViewById(R.id.calibrateButton);
@@ -92,6 +98,8 @@ public final class MainActivity extends AppCompatActivity implements PoseProcess
         int savedQuality = prefs.getInt("quality", 1);
         int savedSmoothing = prefs.getInt("smoothing", 1);
         boolean savedFloorLock = prefs.getBoolean("floor_lock", true);
+        boolean savedBodyTurning = prefs.getBoolean("body_turning", true);
+        boolean savedReverseTurning = prefs.getBoolean("reverse_turning", false);
 
         trackingModeSpinner.setAdapter(new ArrayAdapter<>(
                 this,
@@ -125,11 +133,15 @@ public final class MainActivity extends AppCompatActivity implements PoseProcess
         qualitySpinner.setSelection(savedQuality);
         smoothingSpinner.setSelection(savedSmoothing);
         floorLock.setChecked(savedFloorLock);
+        bodyTurning.setChecked(savedBodyTurning);
+        reverseTurning.setChecked(savedReverseTurning);
 
         trackingMode = trackerModeFromIndex(savedTracking);
         qualityMode = savedQuality;
         smoothingMode = savedSmoothing;
         floorLockEnabled = savedFloorLock;
+        bodyTurningEnabled = savedBodyTurning;
+        reverseTurningEnabled = savedReverseTurning;
 
         updateCameraButton();
 
@@ -161,6 +173,18 @@ public final class MainActivity extends AppCompatActivity implements PoseProcess
 
         floorLock.setOnCheckedChangeListener((button, checked) -> {
             floorLockEnabled = checked;
+            mapper.resetFilters();
+            saveSettings();
+        });
+
+        bodyTurning.setOnCheckedChangeListener((button, checked) -> {
+            bodyTurningEnabled = checked;
+            mapper.resetFilters();
+            saveSettings();
+        });
+
+        reverseTurning.setOnCheckedChangeListener((button, checked) -> {
+            reverseTurningEnabled = checked;
             mapper.resetFilters();
             saveSettings();
         });
@@ -263,6 +287,7 @@ public final class MainActivity extends AppCompatActivity implements PoseProcess
                 mapper.resetFilters();
                 saveSettings();
                 bindCamera();
+                statusText.setText("Camera switched • recalibrate before starting OSC");
             } else {
                 statusText.setText("That camera is not available on this phone");
             }
@@ -297,7 +322,7 @@ public final class MainActivity extends AppCompatActivity implements PoseProcess
         boolean ok = mapper.calibrate(result, heightMeters);
         if (ok) {
             saveSettings();
-            statusText.setText("Calibrated • keep the phone fixed in place");
+            statusText.setText("Calibrated heading + body • face the phone when calibrating");
         } else {
             statusText.setText("Calibration failed • stand straight with feet visible");
         }
@@ -319,7 +344,9 @@ public final class MainActivity extends AppCompatActivity implements PoseProcess
             streamButton.setText("Stop OSC");
             statusText.setText("Streaming "
                     + trackingMode
-                    + " trackers → "
+                    + " trackers"
+                    + (bodyTurningEnabled ? " • 360 turning ON" : "")
+                    + " → "
                     + ip
                     + ":"
                     + OSC_PORT);
@@ -343,6 +370,8 @@ public final class MainActivity extends AppCompatActivity implements PoseProcess
                 .putInt("smoothing", smoothingSpinner == null
                         ? 1 : smoothingSpinner.getSelectedItemPosition())
                 .putBoolean("floor_lock", floorLockEnabled)
+                .putBoolean("body_turning", bodyTurningEnabled)
+                .putBoolean("reverse_turning", reverseTurningEnabled)
                 .apply();
     }
 
@@ -378,6 +407,7 @@ public final class MainActivity extends AppCompatActivity implements PoseProcess
                             + " • "
                             + trackingMode
                             + " trackers"
+                            + (bodyTurningEnabled ? " • 360 turn" : "")
                             + (mapper.isCalibrated() ? " • calibrated" : " • tap Calibrate"));
                 }
             });
@@ -387,7 +417,14 @@ public final class MainActivity extends AppCompatActivity implements PoseProcess
         lastOscSend = now;
 
         List<TrackerMapper.Tracker> trackers =
-                mapper.map(result, trackingMode, smoothingMode, floorLockEnabled);
+                mapper.map(
+                        result,
+                        trackingMode,
+                        smoothingMode,
+                        floorLockEnabled,
+                        bodyTurningEnabled,
+                        reverseTurningEnabled
+                );
 
         String host = ipField.getText().toString().trim();
         for (TrackerMapper.Tracker t : trackers) {
