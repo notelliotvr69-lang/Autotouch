@@ -90,11 +90,31 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content" />
 
-    <CheckBox
-        android:id="@+id/floorLock"
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Floor lock feet (recommended)" />
+        android:orientation="horizontal">
+
+        <CheckBox
+            android:id="@+id/floorLock"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Floor lock" />
+
+        <CheckBox
+            android:id="@+id/bodyTurning"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="360° body turning" />
+    </LinearLayout>
+
+    <CheckBox
+        android:id="@+id/reverseTurning"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Reverse turning direction (only use if avatar turns opposite)" />
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -106,7 +126,7 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="Calibrate" />
+            android:text="Calibrate + Recenter" />
 
         <Button
             android:id="@+id/streamButton"
@@ -119,6 +139,6 @@
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Best setup: phone fixed 2–4 m away, whole body visible, bright room. Balanced + 6 trackers is the recommended starting mode."
+        android:text="For turning: face the phone when you Calibrate, then rotate your whole body. If VR turns the wrong direction, enable Reverse turning."
         android:textSize="11sp" />
 </LinearLayout>
