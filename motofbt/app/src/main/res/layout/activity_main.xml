@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="12dp">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="MotoFBT"
+        android:textSize="28sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/statusText"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Starting camera…"
+        android:paddingBottom="8dp" />
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <androidx.camera.view.PreviewView
+            android:id="@+id/previewView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            app:scaleType="fillCenter" />
+
+        <com.motofbt.app.PoseOverlayView
+            android:id="@+id/overlayView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+    </FrameLayout>
+
+    <EditText
+        android:id="@+id/ipField"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Quest IP (example 192.168.1.50)"
+        android:inputType="text" />
+
+    <EditText
+        android:id="@+id/heightField"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Your height in cm"
+        android:inputType="numberDecimal"
+        android:text="170" />
+
+    <CheckBox
+        android:id="@+id/extraTrackers"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Send chest + knees too (6 trackers)" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+
+        <Button
+            android:id="@+id/calibrateButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Calibrate" />
+
+        <Button
+            android:id="@+id/streamButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Start OSC" />
+    </LinearLayout>
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Quest VRChat: enable OSC, keep phone + Quest on the same Wi‑Fi, then enter the Quest IP above. Start with hip + feet for stability."
+        android:textSize="12sp" />
+</LinearLayout>
