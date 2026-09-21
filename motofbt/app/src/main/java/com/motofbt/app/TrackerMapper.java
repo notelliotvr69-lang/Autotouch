@@ -39,7 +39,14 @@ final class TrackerMapper {
     private float centerX = 0f;
     private float centerZ = 0f;
     private float groundY = 0f;
+
+    private float calibrationBodyYaw = 0f;
+    private float calibrationLeftFootYaw = 0f;
+    private float calibrationRightFootYaw = 0f;
+
     private boolean calibrated = false;
+    private boolean bodyYawReady = false;
+    private float filteredBodyYaw = 0f;
 
     boolean isCalibrated() {
         return calibrated;
@@ -47,6 +54,8 @@ final class TrackerMapper {
 
     void resetFilters() {
         filtered.clear();
+        bodyYawReady = false;
+        filteredBodyYaw = 0f;
     }
 
     boolean calibrate(PoseLandmarkerResult result, float userHeightMeters) {
@@ -62,8 +71,6 @@ final class TrackerMapper {
         float rawHeight = Math.abs(head.y - feet.y);
         if (rawHeight < 0.25f) return false;
 
-        // Face landmarks sit below the top of the skull. This correction keeps
-        // camera-estimated scale closer to the user's entered real height.
         float estimatedFullBody = rawHeight * 1.075f;
         scale = userHeightMeters / estimatedFullBody;
 
@@ -72,6 +79,10 @@ final class TrackerMapper {
         centerX = mappedHip.x;
         centerZ = mappedHip.z;
         groundY = mappedFeet.y;
+
+        calibrationBodyYaw = bodyYawAbsolute(lm);
+        calibrationLeftFootYaw = vectorYawAbsolute(point(lm, 29), point(lm, 31));
+        calibrationRightFootYaw = vectorYawAbsolute(point(lm, 30), point(lm, 32));
 
         calibrated = true;
         resetFilters();
@@ -82,7 +93,9 @@ final class TrackerMapper {
             PoseLandmarkerResult result,
             int trackerMode,
             int smoothingMode,
-            boolean floorLock
+            boolean floorLock,
+            boolean bodyTurning,
+            boolean reverseTurning
     ) {
         List<Landmark> lm = world(result);
         if (lm == null || lm.size() < 33) return List.of();
@@ -96,31 +109,46 @@ final class TrackerMapper {
             rightFoot = floorLock(rightFoot);
         }
 
-        float hipYaw = yawBetween(point(lm, 23), point(lm, 24)) + 90f;
+        float turnSign = reverseTurning ? -1f : 1f;
+        float bodyYaw = 0f;
+
+        if (bodyTurning) {
+            float targetYaw = normalizeAngle(bodyYawAbsolute(lm) - calibrationBodyYaw) * turnSign;
+            bodyYaw = smoothBodyYaw(targetYaw, smoothingMode);
+        }
+
+        float leftFootYaw = bodyTurning
+                ? normalizeAngle(vectorYawAbsolute(point(lm, 29), point(lm, 31))
+                    - calibrationLeftFootYaw) * turnSign
+                : 0f;
+        float rightFootYaw = bodyTurning
+                ? normalizeAngle(vectorYawAbsolute(point(lm, 30), point(lm, 32))
+                    - calibrationRightFootYaw) * turnSign
+                : 0f;
+
         Angles leftFootAngles = anglesBetween(point(lm, 29), point(lm, 31));
         Angles rightFootAngles = anglesBetween(point(lm, 30), point(lm, 32));
 
         List<Tracker> raw = new ArrayList<>();
-        raw.add(new Tracker(1, hip.x, hip.y, hip.z, 0f, hipYaw, 0f));
+        raw.add(new Tracker(1, hip.x, hip.y, hip.z, 0f, bodyYaw, 0f));
         raw.add(new Tracker(2, leftFoot.x, leftFoot.y, leftFoot.z,
-                leftFootAngles.pitch, leftFootAngles.yaw, 0f));
+                leftFootAngles.pitch, leftFootYaw, 0f));
         raw.add(new Tracker(3, rightFoot.x, rightFoot.y, rightFoot.z,
-                rightFootAngles.pitch, rightFootAngles.yaw, 0f));
+                rightFootAngles.pitch, rightFootYaw, 0f));
 
         if (trackerMode >= MODE_6) {
             Vec chest = corrected(average(point(lm, 11), point(lm, 12)));
             Vec leftKnee = corrected(point(lm, 25));
             Vec rightKnee = corrected(point(lm, 26));
 
-            float chestYaw = yawBetween(point(lm, 11), point(lm, 12)) + 90f;
             Angles leftLeg = anglesBetween(point(lm, 23), point(lm, 25));
             Angles rightLeg = anglesBetween(point(lm, 24), point(lm, 26));
 
-            raw.add(new Tracker(4, chest.x, chest.y, chest.z, 0f, chestYaw, 0f));
+            raw.add(new Tracker(4, chest.x, chest.y, chest.z, 0f, bodyYaw, 0f));
             raw.add(new Tracker(5, leftKnee.x, leftKnee.y, leftKnee.z,
-                    leftLeg.pitch, leftLeg.yaw, 0f));
+                    leftLeg.pitch, bodyYaw, 0f));
             raw.add(new Tracker(6, rightKnee.x, rightKnee.y, rightKnee.z,
-                    rightLeg.pitch, rightLeg.yaw, 0f));
+                    rightLeg.pitch, bodyYaw, 0f));
         }
 
         if (trackerMode >= MODE_8) {
@@ -130,9 +158,9 @@ final class TrackerMapper {
             Angles rightArm = anglesBetween(point(lm, 12), point(lm, 14));
 
             raw.add(new Tracker(7, leftElbow.x, leftElbow.y, leftElbow.z,
-                    leftArm.pitch, leftArm.yaw, 0f));
+                    leftArm.pitch, bodyYaw, 0f));
             raw.add(new Tracker(8, rightElbow.x, rightElbow.y, rightElbow.z,
-                    rightArm.pitch, rightArm.yaw, 0f));
+                    rightArm.pitch, bodyYaw, 0f));
         }
 
         List<Tracker> out = new ArrayList<>(raw.size());
@@ -140,6 +168,51 @@ final class TrackerMapper {
             out.add(filter(tracker, smoothingMode));
         }
         return out;
+    }
+
+    private float smoothBodyYaw(float target, int smoothingMode) {
+        if (!bodyYawReady) {
+            filteredBodyYaw = target;
+            bodyYawReady = true;
+            return target;
+        }
+
+        float alpha;
+        if (smoothingMode == SMOOTH_STABLE) alpha = 0.22f;
+        else if (smoothingMode == SMOOTH_RESPONSIVE) alpha = 0.58f;
+        else alpha = 0.36f;
+
+        filteredBodyYaw = lerpAngle(filteredBodyYaw, target, alpha);
+        return filteredBodyYaw;
+    }
+
+    private float bodyYawAbsolute(List<Landmark> lm) {
+        Vec leftSide = average(mapRaw(point(lm, 11)), mapRaw(point(lm, 23)));
+        Vec rightSide = average(mapRaw(point(lm, 12)), mapRaw(point(lm, 24)));
+        Vec shoulders = average(mapRaw(point(lm, 11)), mapRaw(point(lm, 12)));
+        Vec hips = average(mapRaw(point(lm, 23)), mapRaw(point(lm, 24)));
+
+        Vec side = subtract(rightSide, leftSide);
+        Vec up = subtract(shoulders, hips);
+
+        // Torso forward direction from the 3D body plane. Unlike shoulder-only
+        // yaw this keeps a front/back distinction, so turning past 90 degrees
+        // does not make the avatar suddenly snap the wrong way.
+        Vec forward = cross(side, up);
+        float length = length(forward);
+
+        if (length < 0.0001f) {
+            return vectorYawAbsolute(point(lm, 11), point(lm, 12)) + 90f;
+        }
+
+        forward = new Vec(forward.x / length, forward.y / length, forward.z / length);
+        return (float) Math.toDegrees(Math.atan2(forward.x, forward.z));
+    }
+
+    private float vectorYawAbsolute(Vec from, Vec to) {
+        Vec a = mapRaw(from);
+        Vec b = mapRaw(to);
+        return (float) Math.toDegrees(Math.atan2(b.x - a.x, b.z - a.z));
     }
 
     private Tracker filter(Tracker now, int smoothingMode) {
@@ -159,8 +232,6 @@ final class TrackerMapper {
         float dz = now.z - old.z;
         float distance = (float) Math.sqrt(dx * dx + dy * dy + dz * dz);
 
-        // Move faster when the user is really moving, but stay calm on tiny
-        // landmark noise. Also reject single-frame impossible jumps.
         float alpha = Math.min(0.88f, baseAlpha + Math.min(distance, 0.35f) * 1.2f);
         float maxJump = smoothingMode == SMOOTH_RESPONSIVE ? 0.45f : 0.32f;
 
@@ -229,11 +300,6 @@ final class TrackerMapper {
         return new Vec(m.x - centerX, m.y - groundY, m.z - centerZ);
     }
 
-    private float yawBetween(Vec from, Vec to) {
-        Angles a = anglesBetween(from, to);
-        return a.yaw;
-    }
-
     private Angles anglesBetween(Vec from, Vec to) {
         Vec a = corrected(from);
         Vec b = corrected(to);
@@ -270,13 +336,35 @@ final class TrackerMapper {
         );
     }
 
+    private Vec subtract(Vec a, Vec b) {
+        return new Vec(a.x - b.x, a.y - b.y, a.z - b.z);
+    }
+
+    private Vec cross(Vec a, Vec b) {
+        return new Vec(
+                a.y * b.z - a.z * b.y,
+                a.z * b.x - a.x * b.z,
+                a.x * b.y - a.y * b.x
+        );
+    }
+
+    private float length(Vec v) {
+        return (float) Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
+    }
+
+    private float normalizeAngle(float value) {
+        while (value > 180f) value -= 360f;
+        while (value <= -180f) value += 360f;
+        return value;
+    }
+
     private float lerp(float a, float b, float t) {
         return a + (b - a) * t;
     }
 
     private float lerpAngle(float a, float b, float t) {
-        float d = ((b - a + 540f) % 360f) - 180f;
-        return a + d * t;
+        float d = normalizeAngle(b - a);
+        return normalizeAngle(a + d * t);
     }
 
     private static final class Vec {
