@@ -46,6 +46,7 @@ public final class MainActivity extends AppCompatActivity implements PoseProcess
     private CheckBox reverseTurning;
     private Button streamButton;
     private Button cameraButton;
+    private Button alignButton;
 
     private final ExecutorService cameraExecutor = Executors.newSingleThreadExecutor();
     private ProcessCameraProvider cameraProvider;
@@ -87,6 +88,7 @@ public final class MainActivity extends AppCompatActivity implements PoseProcess
         reverseTurning = findViewById(R.id.reverseTurning);
         streamButton = findViewById(R.id.streamButton);
         cameraButton = findViewById(R.id.cameraButton);
+        alignButton = findViewById(R.id.alignButton);
         Button calibrateButton = findViewById(R.id.calibrateButton);
 
         SharedPreferences prefs = getSharedPreferences("settings", MODE_PRIVATE);
@@ -148,6 +150,7 @@ public final class MainActivity extends AppCompatActivity implements PoseProcess
         calibrateButton.setOnClickListener(v -> calibrate());
         streamButton.setOnClickListener(v -> toggleStreaming());
         cameraButton.setOnClickListener(v -> switchCamera());
+        alignButton.setOnClickListener(v -> sendHeadAlignment(true));
 
         trackingModeSpinner.setOnItemSelectedListener(new SimpleItemSelectedListener(position -> {
             trackingMode = trackerModeFromIndex(position);
@@ -340,6 +343,12 @@ public final class MainActivity extends AppCompatActivity implements PoseProcess
                 return;
             }
             saveSettings();
+
+            // A single position + rotation pulse tells VRChat how this
+            // camera-defined tracking space maps onto the current HMD space.
+            // This is the part 0.3 was missing.
+            sendHeadAlignment(false);
+
             streaming = true;
             streamButton.setText("Stop OSC");
             statusText.setText("Streaming "
@@ -354,6 +363,38 @@ public final class MainActivity extends AppCompatActivity implements PoseProcess
             streaming = false;
             streamButton.setText("Start OSC");
             statusText.setText("OSC stopped");
+        }
+    }
+
+    private void sendHeadAlignment(boolean showStatus) {
+        String host = ipField.getText().toString().trim();
+        if (host.isEmpty()) {
+            if (showStatus) statusText.setText("Enter the Quest IP first");
+            return;
+        }
+
+        PoseLandmarkerResult result = latestResult;
+        if (result == null || !mapper.isCalibrated()) {
+            if (showStatus) statusText.setText("Calibrate first");
+            return;
+        }
+
+        TrackerMapper.HeadAnchor head = mapper.headAnchor(result);
+        if (head == null) {
+            if (showStatus) statusText.setText("Head alignment failed • keep full body visible");
+            return;
+        }
+
+        // Send exactly one pulse to each head endpoint. VRChat uses these to
+        // snap position/yaw alignment instead of treating our camera axes as
+        // though they were already the HMD's world axes.
+        oscSender.send(host, OSC_PORT, "/tracking/trackers/head/position",
+                head.x, head.y, head.z);
+        oscSender.send(host, OSC_PORT, "/tracking/trackers/head/rotation",
+                0f, 0f, 0f);
+
+        if (showStatus) {
+            statusText.setText("VRChat tracking space re-aligned");
         }
     }
 
