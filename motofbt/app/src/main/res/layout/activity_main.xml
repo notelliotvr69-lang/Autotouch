@@ -136,9 +136,15 @@
             android:text="Start OSC" />
     </LinearLayout>
 
+    <Button
+        android:id="@+id/alignButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Re-align tracking to VRChat" />
+
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="For turning: face the phone when you Calibrate, then rotate your whole body. If VR turns the wrong direction, enable Reverse turning."
+        android:text="0.4 aligns the camera tracking space to your VRChat head when OSC starts. Face the phone for Calibrate + Recenter, then physically turn. Use Re-align if the avatar starts twisted."
         android:textSize="11sp" />
 </LinearLayout>
