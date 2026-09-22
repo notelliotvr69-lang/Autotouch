@@ -33,6 +33,16 @@ final class TrackerMapper {
         }
     }
 
+    static final class HeadAnchor {
+        final float x, y, z;
+
+        HeadAnchor(float x, float y, float z) {
+            this.x = x;
+            this.y = y;
+            this.z = z;
+        }
+    }
+
     private final Map<Integer, Tracker> filtered = new HashMap<>();
 
     private float scale = 1f;
@@ -168,6 +178,26 @@ final class TrackerMapper {
             out.add(filter(tracker, smoothingMode));
         }
         return out;
+    }
+
+    HeadAnchor headAnchor(PoseLandmarkerResult result) {
+        List<Landmark> lm = world(result);
+        if (lm == null || lm.size() < 33 || !calibrated) return null;
+
+        // VRChat wants the root of the head rather than the eyes. Blend the
+        // ear midpoint toward the shoulder midpoint to approximate the base
+        // of the skull/upper neck while staying in the exact same space as
+        // the virtual body trackers.
+        Vec ears = average(point(lm, 7), point(lm, 8));
+        Vec shoulders = average(point(lm, 11), point(lm, 12));
+        Vec headRoot = new Vec(
+                ears.x * 0.72f + shoulders.x * 0.28f,
+                ears.y * 0.72f + shoulders.y * 0.28f,
+                ears.z * 0.72f + shoulders.z * 0.28f
+        );
+
+        Vec p = corrected(headRoot);
+        return new HeadAnchor(p.x, p.y, p.z);
     }
 
     private float smoothBodyYaw(float target, int smoothingMode) {
