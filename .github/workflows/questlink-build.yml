@@ -3,7 +3,7 @@ name: QuestLink Android Build
 on:
   pull_request:
     paths:
-      - "questlink-android/**"
+      - "questlink-android.zip"
       - ".github/workflows/questlink-build.yml"
   workflow_dispatch:
 
@@ -34,6 +34,17 @@ jobs:
         uses: gradle/actions/setup-gradle@v5
         with:
           gradle-version: "8.9"
+
+      - name: Unpack QuestLink Android project
+        run: |
+          rm -rf questlink-android
+          mkdir questlink-android
+          unzip -q questlink-android.zip -d questlink-android
+          if [ -d questlink-android/QuestLinkAndroid_V0_8 ]; then
+            shopt -s dotglob
+            mv questlink-android/QuestLinkAndroid_V0_8/* questlink-android/
+            rmdir questlink-android/QuestLinkAndroid_V0_8
+          fi
 
       - name: Build QuestLink APK
         run: gradle -p questlink-android --no-daemon clean assembleDebug
