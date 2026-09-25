@@ -24,11 +24,13 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
       - name: Install Android SDK packages
-        run: yes | sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0" || true
+        shell: bash
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          sdkmanager --version
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v5
@@ -36,6 +38,7 @@ jobs:
           gradle-version: "8.9"
 
       - name: Unpack QuestLink Android project
+        shell: bash
         run: |
           rm -rf questlink-android
           mkdir questlink-android
