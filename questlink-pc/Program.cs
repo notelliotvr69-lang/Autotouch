@@ -382,21 +382,31 @@ public static class Launcher
 
         if (game.Name.Equals("Gorilla Tag", StringComparison.OrdinalIgnoreCase))
         {
-            var exe = SteamVrLibrary.FindInstalledExe(game.AppId, "Gorilla Tag.exe");
-            if (exe is not null)
-            {
-                StartMetaQuestLink();
-                StopSteamVr();
+            StartMetaQuestLink();
 
+            try
+            {
                 Process.Start(new ProcessStartInfo
                 {
-                    FileName = exe,
-                    Arguments = "-vrmode oculus",
-                    WorkingDirectory = Path.GetDirectoryName(exe)!,
+                    FileName = "steam://rungameid/250820",
                     UseShellExecute = true
                 });
 
-                return new LaunchResult(true, "Gorilla Tag launched in Oculus / Quest Link mode.");
+                await Task.Delay(3500);
+
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = $"steam://run/{game.AppId}",
+                    UseShellExecute = true
+                });
+
+                return new LaunchResult(
+                    true,
+                    "Started SteamVR, then Gorilla Tag. Put the headset into Quest Link first so SteamVR has a headset to attach to.");
+            }
+            catch (Exception ex)
+            {
+                return new LaunchResult(false, "Could not start SteamVR / Gorilla Tag: " + ex.Message);
             }
         }
 
