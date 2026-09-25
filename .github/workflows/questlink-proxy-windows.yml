@@ -1,0 +1,32 @@
+name: Build QuestLink Runtime Proxy
+
+on:
+  push:
+    branches: [ questlink-runtime-v3 ]
+    paths:
+      - 'questlink-runtime-proxy/**'
+      - '.github/workflows/questlink-proxy-windows.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -S questlink-runtime-proxy -B build/questlink-proxy -A x64
+      - name: Build
+        run: cmake --build build/questlink-proxy --config Release --parallel
+      - name: Stage artifact
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path out | Out-Null
+          Copy-Item build/questlink-proxy/Release/QuestLinkRuntimeProxy.dll out/
+          Copy-Item questlink-runtime-proxy/questlink_proxy_openxr.json out/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: QuestLinkRuntimeProxy-win64
+          path: out/*
