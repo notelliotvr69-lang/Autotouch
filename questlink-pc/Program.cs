@@ -278,7 +278,7 @@ static class SteamVrLibrary
         if (File.Exists(vdf))
         {
             var text = File.ReadAllText(vdf);
-            foreach (Match m in Regex.Matches(text, "\"path\"\s*\"([^\"]+)\""))
+            foreach (Match m in Regex.Matches(text, @"\"path\"\s*\"([^\"]+)\""))
             {
                 var path = m.Groups[1].Value.Replace(@"\\", @"\");
                 if (Directory.Exists(path) && !roots.Contains(path, StringComparer.OrdinalIgnoreCase))
@@ -292,7 +292,7 @@ static class SteamVrLibrary
 
     private static string MatchValue(string acf, string key)
     {
-        var m = Regex.Match(acf, $"\"{Regex.Escape(key)}\"\s*\"([^\"]*)\"", RegexOptions.IgnoreCase);
+        var m = Regex.Match(acf, $@"\"{Regex.Escape(key)}\"\s*\"([^\"]*)\"", RegexOptions.IgnoreCase);
         return m.Success ? m.Groups[1].Value : "";
     }
 
