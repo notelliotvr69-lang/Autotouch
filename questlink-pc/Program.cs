@@ -344,9 +344,18 @@ public sealed class MainForm : Form
 
                     var list = await SteamVrLibrary.GetVrGamesAsync();
                     var game = list.FirstOrDefault(g => g.AppId == appId);
-                    response = game is null
-                        ? new { ok = false, error = "Game not found in PCVR library." }
-                        : await Launcher.LaunchGameAsync(game);
+
+                    if (game is null)
+                    {
+                        response = new { ok = false, error = "Game not found in PCVR library." };
+                    }
+                    else
+                    {
+                        var launch = await Launcher.LaunchGameAsync(game);
+                        response = launch.Ok
+                            ? new { ok = true, message = launch.Message }
+                            : new { ok = false, error = launch.Message };
+                    }
                 }
                 else
                 {
