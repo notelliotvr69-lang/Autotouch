@@ -23,7 +23,7 @@ internal static class Program
 public sealed class MainForm : Form
 {
     private const int Port = 47990;
-    private const string Version = "7.3";
+    private const string Version = "7.4";
 
     private readonly Label status = new();
     private readonly Label ipLabel = new();
@@ -410,19 +410,21 @@ public static class Launcher
 
     private static async Task WaitForQuestLinkAndLaunchGorillaTagAsync(VrGame game)
     {
-        // OculusDash normally appears when the headset actually enters the Quest Link PCVR environment.
-        // OVRServer_x64 is also required for the Meta PC runtime, so require both before launching GTAG.
-        var deadline = DateTime.UtcNow.AddMinutes(2);
+        // Meta Horizon Link's runtime is OVRServer_x64. OculusDash is not reliable
+        // across current Link versions, so don't require it.
+        var deadline = DateTime.UtcNow.AddSeconds(45);
 
         while (DateTime.UtcNow < deadline)
         {
-            var dashRunning = Process.GetProcessesByName("OculusDash").Length > 0;
-            var ovrRunning = Process.GetProcessesByName("OVRServer_x64").Length > 0;
+            var ovrRunning =
+                Process.GetProcessesByName("OVRServer_x64").Length > 0 ||
+                Process.GetProcessesByName("OVRServer").Length > 0;
 
-            if (dashRunning && ovrRunning)
+            if (ovrRunning)
             {
-                // Give the Link compositor a moment to finish attaching the headset.
-                await Task.Delay(2500);
+                // Give the user time to finish entering Quest Link and let the
+                // Meta compositor attach the headset before starting GTAG.
+                await Task.Delay(8000);
 
                 var exe = SteamVrLibrary.FindInstalledExe(game.AppId, "Gorilla Tag.exe");
                 if (exe is null)
