@@ -1,0 +1,9 @@
+{
+  "file_format_version": "1.0.0",
+  "runtime": {
+    "library_path": "QuestLinkRuntimeProxy.dll",
+    "functions": {
+      "xrNegotiateLoaderRuntimeInterface": "xrNegotiateLoaderRuntimeInterface"
+    }
+  }
+}
