@@ -23,7 +23,7 @@ internal static class Program
 public sealed class MainForm : Form
 {
     private const int Port = 47990;
-    private const string Version = "7.4";
+    private const string Version = "7.5";
 
     private readonly Label status = new();
     private readonly Label ipLabel = new();
@@ -392,11 +392,11 @@ public static class Launcher
         if (game.Name.Equals("Gorilla Tag", StringComparison.OrdinalIgnoreCase))
         {
             StartMetaQuestLink();
-            _ = Task.Run(() => WaitForQuestLinkAndLaunchGorillaTagAsync(game));
+            _ = Task.Run(() => DelayedQuestLinkGorillaTagLaunchAsync(game));
 
             return new LaunchResult(
                 true,
-                "Meta Horizon Link opened. Enter Quest Link on the headset; QuestLink will launch Gorilla Tag automatically when the Link session is detected.");
+                "Meta Horizon Link opened. Enter Quest Link now — Gorilla Tag will launch automatically in about 20 seconds.");
         }
 
         Process.Start(new ProcessStartInfo
@@ -408,45 +408,28 @@ public static class Launcher
         return new LaunchResult(true, $"Launching {game.Name} through Steam.");
     }
 
-    private static async Task WaitForQuestLinkAndLaunchGorillaTagAsync(VrGame game)
+    private static async Task DelayedQuestLinkGorillaTagLaunchAsync(VrGame game)
     {
-        // Meta Horizon Link's runtime is OVRServer_x64. OculusDash is not reliable
-        // across current Link versions, so don't require it.
-        var deadline = DateTime.UtcNow.AddSeconds(45);
+        // Meta background processes are not a reliable indicator that the headset
+        // has actually entered Quest Link. Give the user a predictable window to
+        // enter Link, then launch GTAG in the Meta/Oculus runtime directly.
+        await Task.Delay(TimeSpan.FromSeconds(20));
 
-        while (DateTime.UtcNow < deadline)
+        var exe = SteamVrLibrary.FindInstalledExe(game.AppId, "Gorilla Tag.exe");
+        if (exe is null)
+            return;
+
+        try
         {
-            var ovrRunning =
-                Process.GetProcessesByName("OVRServer_x64").Length > 0 ||
-                Process.GetProcessesByName("OVRServer").Length > 0;
-
-            if (ovrRunning)
+            Process.Start(new ProcessStartInfo
             {
-                // Give the user time to finish entering Quest Link and let the
-                // Meta compositor attach the headset before starting GTAG.
-                await Task.Delay(8000);
-
-                var exe = SteamVrLibrary.FindInstalledExe(game.AppId, "Gorilla Tag.exe");
-                if (exe is null)
-                    return;
-
-                try
-                {
-                    Process.Start(new ProcessStartInfo
-                    {
-                        FileName = exe,
-                        Arguments = "-vrmode oculus",
-                        WorkingDirectory = Path.GetDirectoryName(exe)!,
-                        UseShellExecute = true
-                    });
-                }
-                catch { }
-
-                return;
-            }
-
-            await Task.Delay(1000);
+                FileName = exe,
+                Arguments = "-vrmode oculus",
+                WorkingDirectory = Path.GetDirectoryName(exe)!,
+                UseShellExecute = true
+            });
         }
+        catch { }
     }
 
     private static void StartMetaQuestLink()
