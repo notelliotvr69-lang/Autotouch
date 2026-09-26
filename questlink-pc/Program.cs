@@ -23,7 +23,7 @@ internal static class Program
 public sealed class MainForm : Form
 {
     private const int Port = 47990;
-    private const string Version = "7.5";
+    private const string Version = "7.6";
 
     private readonly Label status = new();
     private readonly Label ipLabel = new();
@@ -392,11 +392,11 @@ public static class Launcher
         if (game.Name.Equals("Gorilla Tag", StringComparison.OrdinalIgnoreCase))
         {
             StartMetaQuestLink();
-            _ = Task.Run(() => DelayedQuestLinkGorillaTagLaunchAsync(game));
+            _ = Task.Run(() => DelayedSteamVrGorillaTagLaunchAsync(game));
 
             return new LaunchResult(
                 true,
-                "Meta Horizon Link opened. Enter Quest Link now — Gorilla Tag will launch automatically in about 20 seconds.");
+                "Meta Horizon Link opened. Enter Quest Link now — QuestLink will start SteamVR, then Gorilla Tag in OpenVR mode.");
         }
 
         Process.Start(new ProcessStartInfo
@@ -408,12 +408,26 @@ public static class Launcher
         return new LaunchResult(true, $"Launching {game.Name} through Steam.");
     }
 
-    private static async Task DelayedQuestLinkGorillaTagLaunchAsync(VrGame game)
+    private static async Task DelayedSteamVrGorillaTagLaunchAsync(VrGame game)
     {
-        // Meta background processes are not a reliable indicator that the headset
-        // has actually entered Quest Link. Give the user a predictable window to
-        // enter Link, then launch GTAG in the Meta/Oculus runtime directly.
-        await Task.Delay(TimeSpan.FromSeconds(20));
+        // Give the user time to enter Quest Link first.
+        await Task.Delay(TimeSpan.FromSeconds(8));
+
+        try
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = "steam://rungameid/250820",
+                UseShellExecute = true
+            });
+        }
+        catch
+        {
+            return;
+        }
+
+        // Give SteamVR time to initialize against the Quest Link headset.
+        await Task.Delay(TimeSpan.FromSeconds(8));
 
         var exe = SteamVrLibrary.FindInstalledExe(game.AppId, "Gorilla Tag.exe");
         if (exe is null)
@@ -424,7 +438,7 @@ public static class Launcher
             Process.Start(new ProcessStartInfo
             {
                 FileName = exe,
-                Arguments = "-vrmode oculus",
+                Arguments = "-vrmode openvr",
                 WorkingDirectory = Path.GetDirectoryName(exe)!,
                 UseShellExecute = true
             });
