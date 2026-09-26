@@ -23,7 +23,7 @@ internal static class Program
 public sealed class MainForm : Form
 {
     private const int Port = 47990;
-    private const string Version = "7.6";
+    private const string Version = "7.7";
 
     private readonly Label status = new();
     private readonly Label ipLabel = new();
@@ -118,7 +118,7 @@ public sealed class MainForm : Form
         library.Controls.Add(launchSelected);
 
         var libNote = MakeLabel(
-            "QuestLink scans installed Steam titles and keeps games with Steam VR metadata. Gorilla Tag and VRChat also have explicit installed-app fallbacks so they are not hidden if Steam metadata is incomplete.",
+            "QuestLink scans installed Steam PCVR titles plus Meta Horizon PC-library apps. Gorilla Tag also reports whether BepInEx is installed.",
             10, false);
         libNote.SetBounds(642, 140, 190, 180);
         libNote.AutoSize = false;
@@ -238,6 +238,12 @@ public sealed class MainForm : Form
             return;
         }
 
+        if (!game.Source.Equals("Steam", StringComparison.OrdinalIgnoreCase))
+        {
+            MessageBox.Show("SteamVR per-game settings only apply to Steam/OpenVR games.", "QuestLink");
+            return;
+        }
+
         try
         {
             SteamVrSettings.WritePerApp(
@@ -322,9 +328,12 @@ public sealed class MainForm : Form
                             "vr_game_filter",
                             "list_games",
                             "launch_game",
-                            "gtag_oculus",
+                            "gtag_openvr",
+                            "meta_pcvr_library",
+                            "bepinex_detection",
                             "steamvr_world_scale",
-                            "steamvr_render_scale"
+                            "steamvr_render_scale",
+                            "remote_steamvr_settings"
                         }
                     };
                 }
@@ -357,6 +366,59 @@ public sealed class MainForm : Form
                             : new { ok = false, error = launch.Message };
                     }
                 }
+                else if (cmd == "set_steamvr_settings")
+                {
+                    var appId = root.TryGetProperty("appid", out var id)
+                        ? id.GetString() ?? id.ToString()
+                        : "";
+
+                    var world = root.TryGetProperty("world_scale", out var ws) && ws.TryGetInt32(out var wsv)
+                        ? Math.Clamp(wsv, 10, 1000)
+                        : 100;
+
+                    var render = root.TryGetProperty("render_scale", out var rs) && rs.TryGetInt32(out var rsv)
+                        ? Math.Clamp(rsv, 20, 300)
+                        : 100;
+
+                    var list = await SteamVrLibrary.GetVrGamesAsync();
+                    var game = list.FirstOrDefault(g => g.AppId == appId);
+
+                    if (game is null)
+                    {
+                        response = new { ok = false, error = "Game not found." };
+                    }
+                    else if (!game.Source.Equals("Steam", StringComparison.OrdinalIgnoreCase))
+                    {
+                        response = new { ok = false, error = "SteamVR settings only apply to Steam/OpenVR games." };
+                    }
+                    else
+                    {
+                        SteamVrSettings.WritePerApp(appId, world / 100.0, render);
+                        response = new
+                        {
+                            ok = true,
+                            message = $"Saved SteamVR settings for {game.Name}.",
+                            world_scale = world,
+                            render_scale = render
+                        };
+                    }
+                }
+                else if (cmd == "open_steamvr")
+                {
+                    try
+                    {
+                        Process.Start(new ProcessStartInfo
+                        {
+                            FileName = "steam://rungameid/250820",
+                            UseShellExecute = true
+                        });
+                        response = new { ok = true, message = "SteamVR launch requested." };
+                    }
+                    catch (Exception ex)
+                    {
+                        response = new { ok = false, error = ex.Message };
+                    }
+                }
                 else
                 {
                     response = new { ok = false, error = "Unsupported command." };
@@ -376,9 +438,18 @@ public sealed class MainForm : Form
     }
 }
 
-public record VrGame(string AppId, string Name, string VrSupport)
+public record VrGame(
+    string AppId,
+    string Name,
+    string VrSupport,
+    string Source = "Steam",
+    string? LaunchPath = null,
+    string? LaunchArgs = null,
+    bool BepInExInstalled = false)
 {
-    public string DisplayName => $"{Name}  •  {VrSupport}";
+    public string DisplayName =>
+        $"{Name}  •  {VrSupport}  •  {Source}" +
+        (BepInExInstalled ? "  •  BepInEx ✓" : "");
 }
 
 public record LaunchResult(bool Ok, string Message);
@@ -388,6 +459,31 @@ public static class Launcher
     public static async Task<LaunchResult> LaunchGameAsync(VrGame game)
     {
         await Task.Yield();
+
+        if (game.Source.Equals("Meta", StringComparison.OrdinalIgnoreCase))
+        {
+            StartMetaQuestLink();
+
+            if (string.IsNullOrWhiteSpace(game.LaunchPath) || !File.Exists(game.LaunchPath))
+                return new LaunchResult(false, "Meta PCVR launch file was not found.");
+
+            try
+            {
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = game.LaunchPath,
+                    Arguments = game.LaunchArgs ?? "",
+                    WorkingDirectory = Path.GetDirectoryName(game.LaunchPath)!,
+                    UseShellExecute = true
+                });
+
+                return new LaunchResult(true, $"Launching {game.Name} from the Meta PCVR library.");
+            }
+            catch (Exception ex)
+            {
+                return new LaunchResult(false, "Meta launch failed: " + ex.Message);
+            }
+        }
 
         if (game.Name.Equals("Gorilla Tag", StringComparison.OrdinalIgnoreCase))
         {
@@ -513,10 +609,20 @@ public static class SteamVrLibrary
                     support ??= "PCVR";
 
                 if (!string.IsNullOrWhiteSpace(support))
-                    results.Add(new VrGame(app.AppId, app.Name, support));
+                {
+                    var installDir = GetInstallDirectory(app.AppId);
+                    var bepinex = installDir is not null && IsBepInExInstalled(installDir);
+                    results.Add(new VrGame(app.AppId, app.Name, support, "Steam", null, null, bepinex));
+                }
             }
 
-            cached = results.OrderBy(g => g.Name, StringComparer.OrdinalIgnoreCase).ToList();
+            results.AddRange(MetaPcLibrary.GetInstalledGames());
+
+            cached = results
+                .GroupBy(g => g.AppId, StringComparer.OrdinalIgnoreCase)
+                .Select(g => g.First())
+                .OrderBy(g => g.Name, StringComparer.OrdinalIgnoreCase)
+                .ToList();
             cacheTime = DateTime.UtcNow;
             return cached;
         }
@@ -524,6 +630,37 @@ public static class SteamVrLibrary
         {
             ScanLock.Release();
         }
+    }
+
+    public static string? GetInstallDirectory(string appId)
+    {
+        foreach (var lib in SteamLibraries())
+        {
+            var manifest = Path.Combine(lib, "steamapps", $"appmanifest_{appId}.acf");
+            if (!File.Exists(manifest)) continue;
+
+            try
+            {
+                var text = File.ReadAllText(manifest);
+                var installDir = MatchValue(text, "installdir");
+                if (string.IsNullOrWhiteSpace(installDir)) continue;
+
+                var candidate = Path.Combine(lib, "steamapps", "common", installDir);
+                if (Directory.Exists(candidate))
+                    return candidate;
+            }
+            catch { }
+        }
+
+        return null;
+    }
+
+    public static bool IsBepInExInstalled(string installDir)
+    {
+        var bepin = Path.Combine(installDir, "BepInEx");
+        return Directory.Exists(bepin) &&
+               (Directory.Exists(Path.Combine(bepin, "plugins")) ||
+                File.Exists(Path.Combine(installDir, "winhttp.dll")));
     }
 
     public static string? FindInstalledExe(string appId, string exeName)
@@ -641,6 +778,137 @@ public static class SteamVrLibrary
             }
         }
         catch { }
+
+        return null;
+    }
+}
+
+public static class MetaPcLibrary
+{
+    public static List<VrGame> GetInstalledGames()
+    {
+        var results = new List<VrGame>();
+
+        foreach (var softwareRoot in CandidateSoftwareRoots())
+        {
+            var manifests = Path.Combine(softwareRoot, "Manifests");
+            var software = Path.Combine(softwareRoot, "Software");
+
+            if (!Directory.Exists(manifests))
+                continue;
+
+            foreach (var manifest in Directory.EnumerateFiles(manifests, "*.json"))
+            {
+                try
+                {
+                    using var doc = JsonDocument.Parse(File.ReadAllText(manifest));
+                    var root = doc.RootElement;
+
+                    var canonical = ReadString(root, "canonicalName", "canonical_name", "packageName", "package_name");
+                    var appId = ReadString(root, "appId", "app_id", "id");
+                    var name = ReadString(root, "displayName", "display_name", "title", "name");
+                    var launchFile = ReadString(root, "launchFile", "launch_file", "executable", "launchExecutable");
+                    var launchArgs = ReadString(root, "launchParameters", "launch_parameters", "arguments", "launchArgs");
+
+                    if (string.IsNullOrWhiteSpace(canonical) && string.IsNullOrWhiteSpace(appId))
+                        continue;
+
+                    var installDir = !string.IsNullOrWhiteSpace(canonical)
+                        ? Path.Combine(software, canonical)
+                        : software;
+
+                    var launchPath = ResolveLaunchPath(installDir, launchFile);
+                    if (launchPath is null)
+                        continue;
+
+                    if (string.IsNullOrWhiteSpace(name))
+                        name = !string.IsNullOrWhiteSpace(canonical)
+                            ? canonical.Replace('-', ' ')
+                            : Path.GetFileNameWithoutExtension(launchPath);
+
+                    var key = "meta:" + (!string.IsNullOrWhiteSpace(appId) ? appId : canonical);
+                    var bepinex = SteamVrLibrary.IsBepInExInstalled(Path.GetDirectoryName(launchPath)!);
+
+                    results.Add(new VrGame(
+                        key,
+                        name,
+                        "Meta PCVR",
+                        "Meta",
+                        launchPath,
+                        launchArgs,
+                        bepinex));
+                }
+                catch { }
+            }
+        }
+
+        return results
+            .GroupBy(g => g.AppId, StringComparer.OrdinalIgnoreCase)
+            .Select(g => g.First())
+            .ToList();
+    }
+
+    private static IEnumerable<string> CandidateSoftwareRoots()
+    {
+        var roots = new[]
+        {
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Oculus", "Software"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Oculus", "Software"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Meta Horizon", "Software"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Meta Horizon", "Software")
+        };
+
+        return roots.Where(Directory.Exists).Distinct(StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static string? ResolveLaunchPath(string installDir, string? launchFile)
+    {
+        if (!string.IsNullOrWhiteSpace(launchFile))
+        {
+            var direct = Path.IsPathRooted(launchFile)
+                ? launchFile
+                : Path.Combine(installDir, launchFile);
+
+            if (File.Exists(direct))
+                return direct;
+        }
+
+        if (!Directory.Exists(installDir))
+            return null;
+
+        try
+        {
+            return Directory.EnumerateFiles(installDir, "*.exe", SearchOption.AllDirectories)
+                .FirstOrDefault(p =>
+                {
+                    var n = Path.GetFileName(p);
+                    return !n.Contains("crash", StringComparison.OrdinalIgnoreCase) &&
+                           !n.Contains("unins", StringComparison.OrdinalIgnoreCase) &&
+                           !n.Contains("setup", StringComparison.OrdinalIgnoreCase);
+                });
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static string? ReadString(JsonElement obj, params string[] names)
+    {
+        if (obj.ValueKind != JsonValueKind.Object)
+            return null;
+
+        foreach (var prop in obj.EnumerateObject())
+        {
+            if (!names.Any(n => prop.Name.Equals(n, StringComparison.OrdinalIgnoreCase)))
+                continue;
+
+            if (prop.Value.ValueKind == JsonValueKind.String)
+                return prop.Value.GetString();
+
+            if (prop.Value.ValueKind == JsonValueKind.Number)
+                return prop.Value.ToString();
+        }
 
         return null;
     }
