@@ -23,7 +23,7 @@ internal static class Program
 public sealed class MainForm : Form
 {
     private const int Port = 47990;
-    private const string Version = "7.7";
+    private const string Version = "7.8";
 
     private readonly Label status = new();
     private readonly Label ipLabel = new();
@@ -328,7 +328,8 @@ public sealed class MainForm : Form
                             "vr_game_filter",
                             "list_games",
                             "launch_game",
-                            "gtag_openvr",
+                            "gtag_openxr",
+                            "questlink_runtime_detection",
                             "meta_pcvr_library",
                             "bepinex_detection",
                             "steamvr_world_scale",
@@ -487,12 +488,36 @@ public static class Launcher
 
         if (game.Name.Equals("Gorilla Tag", StringComparison.OrdinalIgnoreCase))
         {
-            StartMetaQuestLink();
-            _ = Task.Run(() => DelayedSteamVrGorillaTagLaunchAsync(game));
+            if (!QuestLinkRuntimeRegistry.IsQuestLinkActive())
+            {
+                return new LaunchResult(
+                    false,
+                    "QuestLink is not the active OpenXR runtime. Install/activate the QuestLink runtime first.");
+            }
 
-            return new LaunchResult(
-                true,
-                "Meta Horizon Link opened. Enter Quest Link now — QuestLink will start SteamVR, then Gorilla Tag in OpenVR mode.");
+            var exe = SteamVrLibrary.FindInstalledExe(game.AppId, "Gorilla Tag.exe");
+            if (exe is null)
+                return new LaunchResult(false, "Gorilla Tag.exe was not found in the Steam library.");
+
+            try
+            {
+                StopSteamVr();
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = exe,
+                    Arguments = "-vrmode openxr",
+                    WorkingDirectory = Path.GetDirectoryName(exe)!,
+                    UseShellExecute = true
+                });
+
+                return new LaunchResult(
+                    true,
+                    "Launching Gorilla Tag directly against the active QuestLink OpenXR runtime (SteamVR is not started).");
+            }
+            catch (Exception ex)
+            {
+                return new LaunchResult(false, "QuestLink OpenXR launch failed: " + ex.Message);
+            }
         }
 
         Process.Start(new ProcessStartInfo
@@ -568,6 +593,38 @@ public static class Launcher
             {
                 try { process.Kill(entireProcessTree: true); } catch { }
             }
+        }
+    }
+}
+
+public static class QuestLinkRuntimeRegistry
+{
+    public static bool IsQuestLinkActive()
+    {
+        try
+        {
+            using var key = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Khronos\OpenXR\1");
+            var path = key?.GetValue("ActiveRuntime") as string;
+            return !string.IsNullOrWhiteSpace(path) &&
+                   path.EndsWith("questlink_runtime.json", StringComparison.OrdinalIgnoreCase) &&
+                   File.Exists(path);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    public static string GetActiveRuntime()
+    {
+        try
+        {
+            using var key = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Khronos\OpenXR\1");
+            return key?.GetValue("ActiveRuntime") as string ?? "Not set";
+        }
+        catch
+        {
+            return "Unavailable";
         }
     }
 }
