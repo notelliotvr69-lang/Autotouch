@@ -9,6 +9,7 @@ FetchContent_Declare(
   openxr_headers
   URL https://github.com/KhronosGroup/OpenXR-SDK/archive/refs/heads/main.zip
   DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+  EXCLUDE_FROM_ALL
 )
 FetchContent_MakeAvailable(openxr_headers)
 
