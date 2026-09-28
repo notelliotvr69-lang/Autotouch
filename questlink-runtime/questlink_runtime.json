@@ -1,0 +1,7 @@
+{
+  "file_format_version": "1.0.0",
+  "runtime": {
+    "name": "QuestLink OpenXR Runtime Prototype",
+    "library_path": "./QuestLinkOpenXRRuntime.dll"
+  }
+}
