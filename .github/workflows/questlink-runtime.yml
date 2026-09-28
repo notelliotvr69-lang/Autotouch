@@ -21,7 +21,7 @@ jobs:
       - name: Configure CMake
         shell: pwsh
         run: |
-          cmake -S questlink-runtime -B build/questlink-runtime -G "Visual Studio 17 2022" -A x64
+          cmake -S questlink-runtime -B build/questlink-runtime -A x64
 
       - name: Build Release DLL
         shell: pwsh
