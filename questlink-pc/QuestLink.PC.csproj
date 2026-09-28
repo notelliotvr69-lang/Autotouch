@@ -12,4 +12,7 @@
     <AssemblyName>QuestLinkPC</AssemblyName>
     <RootNamespace>QuestLinkPC</RootNamespace>
   </PropertyGroup>
+  <ItemGroup Condition="Exists('Assets\\QuestLinkOpenVRShim.dll')">
+    <EmbeddedResource Include="Assets\\QuestLinkOpenVRShim.dll" LogicalName="QuestLink.OpenVRShim" />
+  </ItemGroup>
 </Project>
