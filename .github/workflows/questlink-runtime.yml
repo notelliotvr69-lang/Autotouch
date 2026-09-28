@@ -1,0 +1,63 @@
+name: QuestLink Runtime Windows
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "questlink-runtime/**"
+      - ".github/workflows/questlink-runtime.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build-runtime:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure CMake
+        shell: pwsh
+        run: |
+          cmake -S questlink-runtime -B build/questlink-runtime -G "Visual Studio 17 2022" -A x64
+
+      - name: Build Release DLL
+        shell: pwsh
+        run: |
+          cmake --build build/questlink-runtime --config Release --parallel
+
+      - name: Stage ready-to-use package
+        shell: pwsh
+        run: |
+          $stage = "dist/QuestLinkRuntime-Windows-x64"
+          New-Item -ItemType Directory -Force -Path $stage | Out-Null
+          New-Item -ItemType Directory -Force -Path "$stage/tools" | Out-Null
+
+          Copy-Item "build/questlink-runtime/Release/QuestLinkOpenXRRuntime.dll" "$stage/QuestLinkOpenXRRuntime.dll"
+          Copy-Item "questlink-runtime/questlink_runtime.json" "$stage/questlink_runtime.json"
+          Copy-Item "questlink-runtime/INSTALL_QUESTLINK_RUNTIME.bat" "$stage/INSTALL_QUESTLINK_RUNTIME.bat"
+          Copy-Item "questlink-runtime/RESTORE_PREVIOUS_RUNTIME.bat" "$stage/RESTORE_PREVIOUS_RUNTIME.bat"
+          Copy-Item "questlink-runtime/RUNTIME_STATUS.bat" "$stage/RUNTIME_STATUS.bat"
+          Copy-Item "questlink-runtime/README.txt" "$stage/README.txt"
+          Copy-Item "questlink-runtime/tools/Install-QuestLinkRuntime.ps1" "$stage/tools/Install-QuestLinkRuntime.ps1"
+          Copy-Item "questlink-runtime/tools/Restore-PreviousRuntime.ps1" "$stage/tools/Restore-PreviousRuntime.ps1"
+
+          Compress-Archive -Path "$stage/*" -DestinationPath "dist/QuestLinkRuntime-Windows-x64.zip" -Force
+
+      - name: Verify package
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "dist/QuestLinkRuntime-Windows-x64.zip")) {
+            throw "QuestLinkRuntime-Windows-x64.zip was not created."
+          }
+          Get-Item "dist/QuestLinkRuntime-Windows-x64.zip" | Format-List Name,Length,FullName
+
+      - name: Upload ready-made ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: QuestLinkRuntime-Windows-x64
+          path: dist/QuestLinkRuntime-Windows-x64.zip
+          if-no-files-found: error
+          compression-level: 0
