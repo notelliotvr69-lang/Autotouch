@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
+using System.Reflection;
 using System.Windows.Forms;
 
 namespace QuestLinkPC;
@@ -23,7 +24,7 @@ internal static class Program
 public sealed class MainForm : Form
 {
     private const int Port = 47990;
-    private const string Version = "7.7";
+    private const string Version = "7.8";
 
     private readonly Label status = new();
     private readonly Label ipLabel = new();
@@ -36,6 +37,13 @@ public sealed class MainForm : Form
     private readonly Button launchSelected = new();
     private readonly Button refreshGames = new();
     private readonly Button openSteamVrSettings = new();
+
+    private readonly TextBox openVrBridgeStatus = new();
+    private readonly Button refreshOpenVrBridge = new();
+    private readonly Button installOpenVrProbe = new();
+    private readonly Button restoreOpenVr = new();
+    private readonly Button launchOpenVrProbe = new();
+    private readonly Button openOpenVrLog = new();
 
     private readonly CancellationTokenSource cts = new();
     private List<VrGame> currentGames = new();
@@ -67,10 +75,12 @@ public sealed class MainForm : Form
         var home = new TabPage("Connection") { BackColor = BackColor, ForeColor = ForeColor };
         var library = new TabPage("PCVR Library") { BackColor = BackColor, ForeColor = ForeColor };
         var steamvr = new TabPage("SteamVR Settings") { BackColor = BackColor, ForeColor = ForeColor };
+        var openvr = new TabPage("OpenVR Bridge Lab") { BackColor = BackColor, ForeColor = ForeColor };
 
         tabs.TabPages.Add(home);
         tabs.TabPages.Add(library);
         tabs.TabPages.Add(steamvr);
+        tabs.TabPages.Add(openvr);
         Controls.Add(tabs);
 
         var title = MakeLabel("QuestLink PC V" + Version, 24, true);
@@ -177,7 +187,78 @@ public sealed class MainForm : Form
         selectHint.SetBounds(28, 455, 760, 40);
         steamvr.Controls.Add(selectHint);
 
+        BuildOpenVrBridgeUi(openvr);
         UpdateScaleLabels();
+    }
+
+    private void BuildOpenVrBridgeUi(TabPage page)
+    {
+        var heading = MakeLabel("QuestLink OpenVR → OpenXR Bridge Lab", 18, true);
+        heading.SetBounds(24, 22, 760, 34);
+        page.Controls.Add(heading);
+
+        var intro = MakeLabel(
+            "V7.8 starts with a transparent OpenVR probe. It backs up Gorilla Tag's original openvr_api.dll, logs the exact interfaces GTAG asks for, then forwards calls to the original DLL. This gives us the interface list needed for the real QuestLink mini-runtime.",
+            10, false);
+        intro.SetBounds(24, 62, 800, 86);
+        intro.AutoSize = false;
+        page.Controls.Add(intro);
+
+        refreshOpenVrBridge.Text = "Refresh Status";
+        refreshOpenVrBridge.SetBounds(24, 158, 150, 38);
+        refreshOpenVrBridge.Click += (_, _) => RefreshOpenVrBridgeStatus();
+        page.Controls.Add(refreshOpenVrBridge);
+
+        installOpenVrProbe.Text = "Install Probe";
+        installOpenVrProbe.SetBounds(186, 158, 150, 38);
+        installOpenVrProbe.Click += (_, _) =>
+        {
+            var result = OpenVrBridge.InstallProbe();
+            status.Text = result;
+            RefreshOpenVrBridgeStatus();
+        };
+        page.Controls.Add(installOpenVrProbe);
+
+        restoreOpenVr.Text = "Restore Original";
+        restoreOpenVr.SetBounds(348, 158, 160, 38);
+        restoreOpenVr.Click += (_, _) =>
+        {
+            var result = OpenVrBridge.RestoreOriginal();
+            status.Text = result;
+            RefreshOpenVrBridgeStatus();
+        };
+        page.Controls.Add(restoreOpenVr);
+
+        launchOpenVrProbe.Text = "Launch GTAG Probe";
+        launchOpenVrProbe.SetBounds(520, 158, 170, 38);
+        launchOpenVrProbe.Click += (_, _) =>
+        {
+            var result = OpenVrBridge.LaunchGorillaTagProbe();
+            status.Text = result;
+            RefreshOpenVrBridgeStatus();
+        };
+        page.Controls.Add(launchOpenVrProbe);
+
+        openOpenVrLog.Text = "Open Probe Log";
+        openOpenVrLog.SetBounds(702, 158, 130, 38);
+        openOpenVrLog.Click += (_, _) => OpenVrBridge.OpenLog();
+        page.Controls.Add(openOpenVrLog);
+
+        openVrBridgeStatus.SetBounds(24, 214, 808, 320);
+        openVrBridgeStatus.Multiline = true;
+        openVrBridgeStatus.ReadOnly = true;
+        openVrBridgeStatus.ScrollBars = ScrollBars.Vertical;
+        openVrBridgeStatus.BackColor = Color.FromArgb(20, 23, 30);
+        openVrBridgeStatus.ForeColor = Color.Gainsboro;
+        openVrBridgeStatus.Font = new Font("Consolas", 9f);
+        page.Controls.Add(openVrBridgeStatus);
+
+        RefreshOpenVrBridgeStatus();
+    }
+
+    private void RefreshOpenVrBridgeStatus()
+    {
+        openVrBridgeStatus.Text = OpenVrBridge.Describe();
     }
 
     private static Label MakeLabel(string text, float size, bool bold)
@@ -333,7 +414,10 @@ public sealed class MainForm : Form
                             "bepinex_detection",
                             "steamvr_world_scale",
                             "steamvr_render_scale",
-                            "remote_steamvr_settings"
+                            "remote_steamvr_settings",
+                            "openvr_probe",
+                            "openxr_runtime_detection",
+                            "gtag_openvr_interface_logging"
                         }
                     };
                 }
@@ -402,6 +486,31 @@ public sealed class MainForm : Form
                             render_scale = render
                         };
                     }
+                }
+                else if (cmd == "get_openvr_bridge_status")
+                {
+                    response = new
+                    {
+                        ok = true,
+                        status = OpenVrBridge.Describe(),
+                        installed = OpenVrBridge.IsProbeInstalled(),
+                        active_openxr_runtime = OpenVrBridge.GetActiveOpenXrRuntime()
+                    };
+                }
+                else if (cmd == "install_openvr_probe")
+                {
+                    var message = OpenVrBridge.InstallProbe();
+                    response = new { ok = OpenVrBridge.IsProbeInstalled(), message };
+                }
+                else if (cmd == "restore_openvr")
+                {
+                    var message = OpenVrBridge.RestoreOriginal();
+                    response = new { ok = !OpenVrBridge.IsProbeInstalled(), message };
+                }
+                else if (cmd == "launch_gtag_probe")
+                {
+                    var message = OpenVrBridge.LaunchGorillaTagProbe();
+                    response = new { ok = true, message };
                 }
                 else if (cmd == "open_steamvr")
                 {
@@ -972,5 +1081,187 @@ public static class NetworkHelpers
                 .AddressList.FirstOrDefault(a => a.AddressFamily == AddressFamily.InterNetwork)?.ToString()
                 ?? "127.0.0.1";
         }
+    }
+}
+
+
+public static class OpenVrBridge
+{
+    private const string GorillaTagAppId = "1533390";
+    private const string BackupName = "openvr_api.questlink-original.dll";
+    private const string ProbeResourceName = "QuestLink.OpenVRShim";
+
+    public static string GetActiveOpenXrRuntime()
+    {
+        foreach (var keyPath in new[]
+        {
+            @"SOFTWARE\Khronos\OpenXR\1",
+            @"SOFTWARE\WOW6432Node\Khronos\OpenXR\1"
+        })
+        {
+            try
+            {
+                using var key = Registry.LocalMachine.OpenSubKey(keyPath);
+                var value = key?.GetValue("ActiveRuntime") as string;
+                if (!string.IsNullOrWhiteSpace(value))
+                    return value;
+            }
+            catch { }
+        }
+
+        return "Not detected";
+    }
+
+    public static string? FindGorillaTagOpenVrDll()
+    {
+        var dir = SteamVrLibrary.GetInstallDirectory(GorillaTagAppId);
+        if (string.IsNullOrWhiteSpace(dir) || !Directory.Exists(dir))
+            return null;
+
+        try
+        {
+            var matches = Directory.EnumerateFiles(dir, "openvr_api.dll", SearchOption.AllDirectories).ToList();
+            return matches
+                .OrderByDescending(p => p.Contains("Plugins", StringComparison.OrdinalIgnoreCase))
+                .ThenBy(p => p.Length)
+                .FirstOrDefault();
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    public static bool IsProbeInstalled()
+    {
+        var dll = FindGorillaTagOpenVrDll();
+        if (dll is null) return false;
+        return File.Exists(Path.Combine(Path.GetDirectoryName(dll)!, BackupName));
+    }
+
+    public static string Describe()
+    {
+        var gameDir = SteamVrLibrary.GetInstallDirectory(GorillaTagAppId) ?? "Not found";
+        var openVr = FindGorillaTagOpenVrDll() ?? "Not found";
+        var installed = IsProbeInstalled();
+        var log = openVr == "Not found"
+            ? "Not available"
+            : Path.Combine(Path.GetDirectoryName(openVr)!, "QuestLinkOpenVR.log");
+
+        return
+            "QuestLink OpenVR Bridge Lab V7.8\r\n" +
+            "--------------------------------\r\n" +
+            "Active OpenXR runtime: " + GetActiveOpenXrRuntime() + "\r\n" +
+            "Gorilla Tag: " + gameDir + "\r\n" +
+            "openvr_api.dll: " + openVr + "\r\n" +
+            "Probe installed: " + (installed ? "YES" : "NO") + "\r\n" +
+            "Probe log: " + log + "\r\n\r\n" +
+            "Current milestone: log the exact OpenVR interfaces GTAG requests.\r\n" +
+            "The probe still forwards to the original OpenVR DLL; it is not yet the full QuestLink compositor/runtime.";
+    }
+
+    public static string InstallProbe()
+    {
+        var dll = FindGorillaTagOpenVrDll();
+        if (dll is null)
+            return "Gorilla Tag openvr_api.dll was not found.";
+
+        var folder = Path.GetDirectoryName(dll)!;
+        var backup = Path.Combine(folder, BackupName);
+
+        try
+        {
+            if (!File.Exists(backup))
+                File.Copy(dll, backup, overwrite: false);
+
+            using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(ProbeResourceName);
+            if (stream is null)
+                return "This QuestLink build does not contain the OpenVR probe DLL.";
+
+            using var output = new FileStream(dll, FileMode.Create, FileAccess.Write, FileShare.Read);
+            stream.CopyTo(output);
+
+            var log = Path.Combine(folder, "QuestLinkOpenVR.log");
+            File.AppendAllText(log,
+                $"[{DateTime.Now:O}] Probe installed by QuestLink PC V7.8{Environment.NewLine}");
+
+            return "QuestLink OpenVR probe installed. Original DLL backed up.";
+        }
+        catch (Exception ex)
+        {
+            return "Probe install failed: " + ex.Message;
+        }
+    }
+
+    public static string RestoreOriginal()
+    {
+        var dll = FindGorillaTagOpenVrDll();
+        if (dll is null)
+            return "Gorilla Tag openvr_api.dll was not found.";
+
+        var folder = Path.GetDirectoryName(dll)!;
+        var backup = Path.Combine(folder, BackupName);
+
+        if (!File.Exists(backup))
+            return "No QuestLink OpenVR backup exists.";
+
+        try
+        {
+            File.Copy(backup, dll, overwrite: true);
+            File.Delete(backup);
+            return "Original Gorilla Tag OpenVR DLL restored.";
+        }
+        catch (Exception ex)
+        {
+            return "Restore failed: " + ex.Message;
+        }
+    }
+
+    public static string LaunchGorillaTagProbe()
+    {
+        var exe = SteamVrLibrary.FindInstalledExe(GorillaTagAppId, "Gorilla Tag.exe");
+        if (exe is null)
+            return "Gorilla Tag.exe was not found.";
+
+        if (!IsProbeInstalled())
+            return "Install the QuestLink OpenVR probe first.";
+
+        try
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = exe,
+                Arguments = "-vrmode openvr",
+                WorkingDirectory = Path.GetDirectoryName(exe)!,
+                UseShellExecute = true
+            });
+            return "Gorilla Tag launched in OpenVR probe mode. Check QuestLinkOpenVR.log after it starts.";
+        }
+        catch (Exception ex)
+        {
+            return "Probe launch failed: " + ex.Message;
+        }
+    }
+
+    public static void OpenLog()
+    {
+        var dll = FindGorillaTagOpenVrDll();
+        if (dll is null) return;
+        var log = Path.Combine(Path.GetDirectoryName(dll)!, "QuestLinkOpenVR.log");
+        if (!File.Exists(log))
+        {
+            File.WriteAllText(log, "QuestLink OpenVR probe log has not received any calls yet." + Environment.NewLine);
+        }
+
+        try
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = "notepad.exe",
+                Arguments = "\"" + log + "\"",
+                UseShellExecute = true
+            });
+        }
+        catch { }
     }
 }
