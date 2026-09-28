@@ -7,8 +7,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 include(FetchContent)
 FetchContent_Declare(
   openxr_headers
-  GIT_REPOSITORY https://github.com/KhronosGroup/OpenXR-Headers.git
-  GIT_TAG main
+  URL https://github.com/KhronosGroup/OpenXR-Headers/archive/refs/heads/main.zip
+  DOWNLOAD_EXTRACT_TIMESTAMP TRUE
 )
 FetchContent_MakeAvailable(openxr_headers)
 
