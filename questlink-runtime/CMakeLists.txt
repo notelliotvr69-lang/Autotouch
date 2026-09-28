@@ -4,15 +4,6 @@ project(QuestLinkOpenXRRuntime LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-include(FetchContent)
-FetchContent_Declare(
-  openxr_headers
-  URL https://github.com/KhronosGroup/OpenXR-SDK/archive/refs/heads/main.zip
-  DOWNLOAD_EXTRACT_TIMESTAMP TRUE
-  EXCLUDE_FROM_ALL
-)
-FetchContent_MakeAvailable(openxr_headers)
-
 add_library(QuestLinkOpenXRRuntime SHARED
     runtime.cpp
 )
@@ -26,7 +17,7 @@ target_compile_definitions(QuestLinkOpenXRRuntime PRIVATE
 )
 
 target_include_directories(QuestLinkOpenXRRuntime PRIVATE
-    ${openxr_headers_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
 target_link_libraries(QuestLinkOpenXRRuntime PRIVATE
