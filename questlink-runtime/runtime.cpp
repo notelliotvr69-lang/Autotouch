@@ -1,14 +1,11 @@
-#define XR_NO_PROTOTYPES
-#define XR_USE_PLATFORM_WIN32
-#define XR_USE_GRAPHICS_API_D3D11
+#include <windows.h>
+#include <unknwn.h>
+#include <d3d11.h>
+#include <dxgi1_2.h>
 
 #include <openxr/openxr.h>
 #include <openxr/openxr_platform.h>
 #include <openxr/openxr_loader_negotiation.h>
-
-#include <windows.h>
-#include <d3d11.h>
-#include <dxgi1_2.h>
 
 #include <algorithm>
 #include <atomic>
@@ -160,7 +157,7 @@ static XrResult XRAPI_CALL ql_xrEnumerateInstanceExtensionProperties(
     if (!properties || propertyCapacityInput < 1) return XR_ERROR_SIZE_INSUFFICIENT;
 
     copyText(properties[0].extensionName, XR_KHR_D3D11_ENABLE_EXTENSION_NAME);
-    properties[0].extensionVersion = XR_KHR_D3D11_ENABLE_SPEC_VERSION;
+    properties[0].extensionVersion = XR_KHR_D3D11_enable_SPEC_VERSION;
     return XR_SUCCESS;
 }
 
