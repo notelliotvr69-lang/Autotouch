@@ -61,7 +61,7 @@ public class MainActivity extends Activity {
         root.setPadding(38, 28, 38, 40);
         root.setBackgroundColor(Color.rgb(15, 17, 22));
 
-        TextView title = text("QuestLink V7.7", 30);
+        TextView title = text("QuestLink V7.8", 30);
         title.setTypeface(Typeface.DEFAULT_BOLD);
         root.addView(title);
 
@@ -165,6 +165,49 @@ public class MainActivity extends Activity {
                 14);
         settingsNote.setTextColor(Color.GRAY);
         root.addView(settingsNote);
+
+        TextView bridgeHeading = text("OpenVR → OpenXR Bridge Lab", 22);
+        bridgeHeading.setTypeface(Typeface.DEFAULT_BOLD);
+        bridgeHeading.setPadding(8, 28, 8, 8);
+        root.addView(bridgeHeading);
+
+        TextView bridgeNote = text(
+                "V7.8 adds a Gorilla Tag OpenVR probe. It backs up the original OpenVR DLL, logs the interfaces GTAG asks for, and forwards calls while we build the QuestLink mini-runtime.",
+                14);
+        bridgeNote.setTextColor(Color.GRAY);
+        root.addView(bridgeNote);
+
+        TextView bridgeStatus = text("Bridge status: not checked", 14);
+        bridgeStatus.setTextColor(Color.LTGRAY);
+        root.addView(bridgeStatus);
+
+        Button bridgeCheck = new Button(this);
+        bridgeCheck.setText("CHECK OPENVR BRIDGE");
+        bridgeCheck.setOnClickListener(v -> request("get_openvr_bridge_status", null, result ->
+                bridgeStatus.setText(result.optString("status", "No bridge status returned."))));
+        root.addView(bridgeCheck);
+
+        Button bridgeInstall = new Button(this);
+        bridgeInstall.setText("INSTALL GTAG OPENVR PROBE");
+        bridgeInstall.setOnClickListener(v -> request("install_openvr_probe", null, result -> {
+            bridgeStatus.setText(result.optString("message", "Probe install command finished."));
+            status.setText(result.optString("message", "Probe install command finished."));
+        }));
+        root.addView(bridgeInstall);
+
+        Button bridgeLaunch = new Button(this);
+        bridgeLaunch.setText("LAUNCH GTAG OPENVR PROBE");
+        bridgeLaunch.setOnClickListener(v -> request("launch_gtag_probe", null, result ->
+                status.setText(result.optString("message", "GTAG probe launch requested."))));
+        root.addView(bridgeLaunch);
+
+        Button bridgeRestore = new Button(this);
+        bridgeRestore.setText("RESTORE ORIGINAL OPENVR");
+        bridgeRestore.setOnClickListener(v -> request("restore_openvr", null, result -> {
+            bridgeStatus.setText(result.optString("message", "Restore command finished."));
+            status.setText(result.optString("message", "Restore command finished."));
+        }));
+        root.addView(bridgeRestore);
 
         scroll.addView(root);
         setContentView(scroll);
