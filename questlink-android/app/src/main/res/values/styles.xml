@@ -2,6 +2,6 @@
     <style name="AppTheme" parent="android:style/Theme.Material.NoActionBar">
         <item name="android:fontFamily">sans</item>
         <item name="android:windowBackground">#0f1116</item>
-        <item name="android:colorAccent">#8ab4f8</item>
+        <item name="android:colorAccent">#7e57ff</item>
     </style>
 </resources>
