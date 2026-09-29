@@ -51,13 +51,13 @@ jobs:
           Copy-Item "questlink-runtime/tools/Install-QuestLinkRuntime.ps1" "$stage/tools/Install-QuestLinkRuntime.ps1"
           Copy-Item "questlink-runtime/tools/Restore-PreviousRuntime.ps1" "$stage/tools/Restore-PreviousRuntime.ps1"
 
-          Compress-Archive -Path "$stage/*" -DestinationPath "dist/QuestLinkRuntime-Windows-x64-v0.2.zip" -Force
+          Compress-Archive -Path "$stage/*" -DestinationPath "dist/QuestLinkRuntime-Windows-x64-v0.3.zip" -Force
 
       - name: Upload runtime package
         uses: actions/upload-artifact@v4
         with:
           name: QuestLinkRuntime-Web
-          path: dist/QuestLinkRuntime-Windows-x64-v0.2.zip
+          path: dist/QuestLinkRuntime-Windows-x64-v0.3.zip
           if-no-files-found: error
           compression-level: 0
 
@@ -112,18 +112,18 @@ jobs:
       - name: Assemble website downloads
         shell: bash
         run: |
-          cp questlink-android/app/build/outputs/apk/debug/app-debug.apk questlink-site/QuestLinkClient-v7.9.apk
+          cp questlink-android/app/build/outputs/apk/debug/app-debug.apk questlink-site/QuestLinkClient-v7.10.apk
 
           mkdir -p pc-package
           cp questlink-pc/bin/Release/net8.0-windows/win-x64/publish/QuestLinkPC.exe pc-package/QuestLinkPC.exe
-          (cd pc-package && zip -q ../questlink-site/QuestLinkPC-v7.9.1.1.zip QuestLinkPC.exe)
+          (cd pc-package && zip -q ../questlink-site/QuestLinkPC-v7.9.1.zip QuestLinkPC.exe)
 
-          cp runtime-download/QuestLinkRuntime-Windows-x64-v0.2.zip questlink-site/QuestLinkRuntime-Windows-x64-v0.2.zip
+          cp runtime-download/QuestLinkRuntime-Windows-x64-v0.3.zip questlink-site/QuestLinkRuntime-Windows-x64-v0.3.zip
 
-          test -f questlink-site/QuestLinkClient-v7.9.apk
-          test -f questlink-site/QuestLinkPC-v7.9.1.1.zip
-          test -f questlink-site/QuestLinkRuntime-Windows-x64-v0.2.zip
-          ls -lh questlink-site/QuestLinkClient-v7.9.apk questlink-site/QuestLinkPC-v7.9.1.1.zip questlink-site/QuestLinkRuntime-Windows-x64-v0.2.zip
+          test -f questlink-site/QuestLinkClient-v7.10.apk
+          test -f questlink-site/QuestLinkPC-v7.9.1.zip
+          test -f questlink-site/QuestLinkRuntime-Windows-x64-v0.3.zip
+          ls -lh questlink-site/QuestLinkClient-v7.10.apk questlink-site/QuestLinkPC-v7.9.1.zip questlink-site/QuestLinkRuntime-Windows-x64-v0.3.zip
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
