@@ -4,6 +4,7 @@
 #include <mftransform.h>
 #include <mferror.h>
 #include <codecapi.h>
+#include <strmif.h>
 #include <wrl/client.h>
 #include <chrono>
 #include <thread>
