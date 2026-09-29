@@ -3,9 +3,15 @@ package com.questtools.questlink;
 import android.app.Activity;
 import android.content.SharedPreferences;
 import android.content.res.ColorStateList;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -22,9 +28,10 @@ import java.io.*;
 import java.net.*;
 import java.util.*;
 
-public class MainActivity extends Activity {
+public class MainActivity extends Activity implements SensorEventListener {
     private static final int PORT = 47990;
-    private static final String VERSION = "7.9";
+    private static final int STREAM_PORT = 47991;
+    private static final String VERSION = "7.10";
 
     private static final int BG = Color.rgb(9, 11, 17);
     private static final int PANEL = Color.rgb(20, 23, 34);
@@ -51,6 +58,21 @@ public class MainActivity extends Activity {
     private Button connectButton;
     private Button refreshButton;
     private Button launchGtagButton;
+    private Button streamButton;
+
+    private FrameLayout appShell;
+    private FrameLayout streamOverlay;
+    private ImageView streamView;
+    private TextView streamStatus;
+
+    private volatile boolean streamRunning = false;
+    private Socket streamSocket;
+    private DataOutputStream streamOut;
+    private Thread streamThread;
+
+    private SensorManager sensorManager;
+    private Sensor rotationSensor;
+    private long lastPoseSendNs = 0L;
 
     private String selectedSteamAppId = "";
     private String selectedSteamName = "";
@@ -69,6 +91,11 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         prefs = getSharedPreferences("questlink", MODE_PRIVATE);
+        sensorManager = (SensorManager) getSystemService(SENSOR_SERVICE);
+        rotationSensor = sensorManager.getDefaultSensor(Sensor.TYPE_GAME_ROTATION_VECTOR);
+        if (rotationSensor == null) {
+            rotationSensor = sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR);
+        }
         buildUi();
     }
 
@@ -283,9 +310,9 @@ public class MainActivity extends Activity {
         gtagNames.addView(gtagModSummary);
         gtagHead.addView(gtagNames, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
-        launchGtagButton = actionButton("Launch with QuestLink", true);
+        launchGtagButton = actionButton("Launch + Stream", true);
         launchGtagButton.setEnabled(false);
-        launchGtagButton.setOnClickListener(v -> launch("1533390", "Gorilla Tag"));
+        launchGtagButton.setOnClickListener(v -> launchAndStreamGtag());
         gtagHead.addView(launchGtagButton, new LinearLayout.LayoutParams(dp(245), dp(52)));
 
         gtagPanel.addView(gtagHead);
@@ -295,6 +322,13 @@ public class MainActivity extends Activity {
         gtagModsBox.setOrientation(LinearLayout.VERTICAL);
         gtagModsBox.addView(muted("BepInEx/plugin details will appear here.", 13));
         gtagPanel.addView(gtagModsBox);
+
+        addSpace(gtagPanel, 14);
+        streamButton = actionButton("Connect to Running QuestLink Stream", false);
+        streamButton.setEnabled(false);
+        streamButton.setOnClickListener(v -> startStreamPreviewWithRetry(1));
+        gtagPanel.addView(streamButton, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(48)));
 
         root.addView(gtagPanel, fullWrap());
 
@@ -365,13 +399,59 @@ public class MainActivity extends Activity {
         addSpace(root, 18);
 
         TextView bridge = muted(
-                "QuestLink launcher path is ready. PC-to-Quest video streaming and real headset/controller tracking are the next runtime/client bridge milestone.",
+                "V7.10 can receive the runtime's first live stereo stream preview and send Quest orientation back to the PC runtime. This is the bridge test build, not final low-latency immersive VR yet.",
                 12);
         bridge.setGravity(Gravity.CENTER);
         root.addView(bridge);
 
         scroll.addView(root);
-        setContentView(scroll);
+
+        appShell = new FrameLayout(this);
+        appShell.setBackgroundColor(BG);
+        appShell.addView(scroll, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT));
+
+        buildStreamOverlay();
+        appShell.addView(streamOverlay, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT));
+
+        setContentView(appShell);
+    }
+
+    private void buildStreamOverlay() {
+        streamOverlay = new FrameLayout(this);
+        streamOverlay.setBackgroundColor(Color.BLACK);
+        streamOverlay.setVisibility(View.GONE);
+
+        streamView = new ImageView(this);
+        streamView.setBackgroundColor(Color.BLACK);
+        streamView.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        streamOverlay.addView(streamView, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT));
+
+        LinearLayout topBar = new LinearLayout(this);
+        topBar.setOrientation(LinearLayout.HORIZONTAL);
+        topBar.setGravity(Gravity.CENTER_VERTICAL);
+        topBar.setPadding(dp(18), dp(14), dp(18), dp(14));
+        topBar.setBackgroundColor(Color.argb(180, 0, 0, 0));
+
+        Button exit = actionButton("Exit Stream", false);
+        exit.setOnClickListener(v -> stopStreamPreview());
+        topBar.addView(exit, new LinearLayout.LayoutParams(dp(150), dp(46)));
+
+        streamStatus = text("Waiting for QuestLink runtime stream...", 14);
+        streamStatus.setPadding(dp(16), 0, 0, 0);
+        topBar.addView(streamStatus, new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+        FrameLayout.LayoutParams topLp = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                Gravity.TOP);
+        streamOverlay.addView(topBar, topLp);
     }
 
     private abstract static class SimpleSeekListener implements SeekBar.OnSeekBarChangeListener {
@@ -404,6 +484,7 @@ public class MainActivity extends Activity {
         refreshButton.setEnabled(isConnected);
         openSteamVrButton.setEnabled(isConnected);
         launchGtagButton.setEnabled(isConnected && questLinkRuntimeActive);
+        if (streamButton != null) streamButton.setEnabled(isConnected && questLinkRuntimeActive);
     }
 
     private void connectAndLoad() {
@@ -443,6 +524,7 @@ public class MainActivity extends Activity {
                     18,
                     questLinkRuntimeActive ? Color.argb(110, 101, 214, 139) : Color.argb(110, 255, 183, 77)));
             launchGtagButton.setEnabled(connected && questLinkRuntimeActive);
+            if (streamButton != null) streamButton.setEnabled(connected && questLinkRuntimeActive);
         });
     }
 
@@ -518,7 +600,13 @@ public class MainActivity extends Activity {
         Button launch = actionButton(
                 name.equalsIgnoreCase("Gorilla Tag") ? "Launch with QuestLink" : "Launch on PC",
                 name.equalsIgnoreCase("Gorilla Tag"));
-        launch.setOnClickListener(v -> launch(appid, name));
+        launch.setOnClickListener(v -> {
+            if (name.equalsIgnoreCase("Gorilla Tag")) {
+                launchAndStreamGtag();
+            } else {
+                launch(appid, name);
+            }
+        });
         card.addView(launch, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48)));
 
         if (source.equalsIgnoreCase("Steam")) {
@@ -581,6 +669,212 @@ public class MainActivity extends Activity {
         });
     }
 
+    private void launchAndStreamGtag() {
+        try {
+            JSONObject extra = new JSONObject();
+            extra.put("appid", "1533390");
+            status.setText("Launching Gorilla Tag with QuestLink runtime...");
+
+            request("launch_game", extra, result -> {
+                status.setText(result.optString("message", "Gorilla Tag launch command sent."));
+                loadRuntimeStatus();
+                loadGtagMods();
+
+                // The runtime stream server starts when the game creates its OpenXR session.
+                // Retry for a while so the user does not need to time the connection manually.
+                startStreamPreviewWithRetry(30);
+            });
+        } catch (Exception ex) {
+            status.setText("Launch error: " + ex.getMessage());
+        }
+    }
+
+    private void startStreamPreviewWithRetry(int maxAttempts) {
+        if (streamRunning) return;
+        if (ip().isEmpty()) {
+            status.setText("Connect to the PC first.");
+            return;
+        }
+
+        streamRunning = true;
+        streamOverlay.setVisibility(View.VISIBLE);
+        streamStatus.setText("Waiting for Gorilla Tag / runtime stream on port " + STREAM_PORT + "...");
+        streamView.setImageDrawable(null);
+
+        streamThread = new Thread(() -> {
+            Exception lastError = null;
+
+            for (int attempt = 1; attempt <= Math.max(1, maxAttempts) && streamRunning; attempt++) {
+                try {
+                    Socket socket = new Socket();
+                    socket.setTcpNoDelay(true);
+                    socket.connect(new InetSocketAddress(ip(), STREAM_PORT), 1500);
+                    socket.setSoTimeout(15000);
+
+                    streamSocket = socket;
+                    streamOut = new DataOutputStream(new BufferedOutputStream(socket.getOutputStream()));
+
+                    ui.post(() -> {
+                        streamStatus.setText("LIVE • QuestLink stereo bridge");
+                        startPoseTracking();
+                    });
+
+                    readStreamLoop(socket);
+                    lastError = null;
+                    break;
+                } catch (Exception ex) {
+                    lastError = ex;
+                    closeStreamSocketOnly();
+
+                    final int a = attempt;
+                    ui.post(() -> streamStatus.setText(
+                            "Waiting for runtime stream... attempt " + a + "/" + Math.max(1, maxAttempts)));
+
+                    if (!streamRunning) break;
+                    try { Thread.sleep(1000); } catch (InterruptedException ignored) {}
+                }
+            }
+
+            if (streamRunning && lastError != null) {
+                String message = lastError.getMessage() == null
+                        ? lastError.getClass().getSimpleName()
+                        : lastError.getMessage();
+                ui.post(() -> streamStatus.setText("Stream connection failed: " + message));
+            }
+        }, "QuestLinkStream");
+
+        streamThread.start();
+    }
+
+    private void readStreamLoop(Socket socket) throws IOException {
+        DataInputStream in = new DataInputStream(new BufferedInputStream(socket.getInputStream()));
+        byte[] magic = new byte[4];
+
+        while (streamRunning && !socket.isClosed()) {
+            in.readFully(magic);
+            if (magic[0] != 'Q' || magic[1] != 'L' || magic[2] != 'F' || magic[3] != '1') {
+                throw new IOException("Bad QuestLink stream packet");
+            }
+
+            int width = in.readInt();
+            int height = in.readInt();
+            long frameId = in.readLong();
+            int payloadSize = in.readInt();
+
+            if (width <= 0 || height <= 0 || width > 4096 || height > 4096 ||
+                    payloadSize <= 0 || payloadSize > 16 * 1024 * 1024) {
+                throw new IOException("Invalid QuestLink frame");
+            }
+
+            byte[] jpeg = new byte[payloadSize];
+            in.readFully(jpeg);
+
+            Bitmap bitmap = BitmapFactory.decodeByteArray(jpeg, 0, jpeg.length);
+            if (bitmap == null) continue;
+
+            ui.post(() -> {
+                if (!streamRunning) {
+                    bitmap.recycle();
+                    return;
+                }
+
+                streamView.setImageBitmap(bitmap);
+                streamStatus.setText(
+                        "LIVE • " + width + "×" + height +
+                        " • frame " + frameId +
+                        " • Quest pose → PC");
+            });
+        }
+    }
+
+    private void startPoseTracking() {
+        if (sensorManager == null || rotationSensor == null) {
+            streamStatus.setText(streamStatus.getText() + " • no rotation sensor");
+            return;
+        }
+
+        sensorManager.unregisterListener(this);
+        sensorManager.registerListener(
+                this,
+                rotationSensor,
+                SensorManager.SENSOR_DELAY_GAME);
+    }
+
+    private void stopPoseTracking() {
+        if (sensorManager != null) {
+            sensorManager.unregisterListener(this);
+        }
+    }
+
+    @Override
+    public void onSensorChanged(SensorEvent event) {
+        if (!streamRunning || event.sensor != rotationSensor || streamOut == null) return;
+
+        long now = System.nanoTime();
+        if (now - lastPoseSendNs < 16_000_000L) return;
+        lastPoseSendNs = now;
+
+        float[] q = new float[4];
+        try {
+            SensorManager.getQuaternionFromVector(q, event.values);
+        } catch (Exception ignored) {
+            return;
+        }
+
+        // Android returns quaternion as [w, x, y, z].
+        sendHeadPose(q[1], q[2], q[3], q[0], 0.0f, 1.6f, 0.0f);
+    }
+
+    @Override
+    public void onAccuracyChanged(Sensor sensor, int accuracy) {
+    }
+
+    private void sendHeadPose(
+            float x, float y, float z, float w,
+            float px, float py, float pz) {
+
+        DataOutputStream out = streamOut;
+        if (out == null) return;
+
+        synchronized (this) {
+            try {
+                out.writeBytes("QLH1");
+                out.writeFloat(x);
+                out.writeFloat(y);
+                out.writeFloat(z);
+                out.writeFloat(w);
+                out.writeFloat(px);
+                out.writeFloat(py);
+                out.writeFloat(pz);
+                out.flush();
+            } catch (IOException ignored) {
+            }
+        }
+    }
+
+    private void closeStreamSocketOnly() {
+        DataOutputStream out = streamOut;
+        streamOut = null;
+        if (out != null) {
+            try { out.close(); } catch (Exception ignored) {}
+        }
+
+        Socket socket = streamSocket;
+        streamSocket = null;
+        if (socket != null) {
+            try { socket.close(); } catch (Exception ignored) {}
+        }
+    }
+
+    private void stopStreamPreview() {
+        streamRunning = false;
+        stopPoseTracking();
+        closeStreamSocketOnly();
+
+        if (streamOverlay != null) streamOverlay.setVisibility(View.GONE);
+        if (status != null) status.setText("QuestLink stream stopped.");
+    }
+
     private void selectForSettings(String appid, String name) {
         selectedSteamAppId = appid;
         selectedSteamName = name;
@@ -631,6 +925,12 @@ public class MainActivity extends Activity {
         } catch (Exception ex) {
             status.setText("Launch error: " + ex.getMessage());
         }
+    }
+
+    @Override
+    protected void onDestroy() {
+        stopStreamPreview();
+        super.onDestroy();
     }
 
     private interface Success {
