@@ -6,6 +6,7 @@ on:
     paths:
       - 'questlink-android/**'
       - 'questlink-pc/**'
+      - 'questlink-runtime/**'
       - 'questlink-site/**'
       - '.github/workflows/questlink-pages.yml'
   workflow_dispatch:
@@ -20,9 +21,50 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  build-runtime:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure runtime
+        shell: pwsh
+        run: cmake -S questlink-runtime -B build/questlink-runtime -A x64
+
+      - name: Build runtime
+        shell: pwsh
+        run: cmake --build build/questlink-runtime --config Release --parallel
+
+      - name: Package runtime
+        shell: pwsh
+        run: |
+          $stage = "dist/QuestLinkRuntime-Windows-x64"
+          New-Item -ItemType Directory -Force -Path $stage | Out-Null
+          New-Item -ItemType Directory -Force -Path "$stage/tools" | Out-Null
+
+          Copy-Item "build/questlink-runtime/Release/QuestLinkOpenXRRuntime.dll" "$stage/QuestLinkOpenXRRuntime.dll"
+          Copy-Item "questlink-runtime/questlink_runtime.json" "$stage/questlink_runtime.json"
+          Copy-Item "questlink-runtime/INSTALL_QUESTLINK_RUNTIME.bat" "$stage/INSTALL_QUESTLINK_RUNTIME.bat"
+          Copy-Item "questlink-runtime/RESTORE_PREVIOUS_RUNTIME.bat" "$stage/RESTORE_PREVIOUS_RUNTIME.bat"
+          Copy-Item "questlink-runtime/RUNTIME_STATUS.bat" "$stage/RUNTIME_STATUS.bat"
+          Copy-Item "questlink-runtime/README.txt" "$stage/README.txt"
+          Copy-Item "questlink-runtime/tools/Install-QuestLinkRuntime.ps1" "$stage/tools/Install-QuestLinkRuntime.ps1"
+          Copy-Item "questlink-runtime/tools/Restore-PreviousRuntime.ps1" "$stage/tools/Restore-PreviousRuntime.ps1"
+
+          Compress-Archive -Path "$stage/*" -DestinationPath "dist/QuestLinkRuntime-Windows-x64-v0.2.zip" -Force
+
+      - name: Upload runtime package
+        uses: actions/upload-artifact@v4
+        with:
+          name: QuestLinkRuntime-Web
+          path: dist/QuestLinkRuntime-Windows-x64-v0.2.zip
+          if-no-files-found: error
+          compression-level: 0
+
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    needs: build-runtime
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -51,24 +93,37 @@ jobs:
 
       - name: Build Quest APK
         working-directory: questlink-android
-        run: gradle --no-daemon assembleDebug
+        run: gradle --no-daemon clean assembleDebug
 
       - name: Set up .NET 8
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
 
-      - name: Build native Windows QuestLink PC
+      - name: Build QuestLink PC
         run: dotnet publish questlink-pc/QuestLink.PC.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true
 
-      - name: Assemble website
+      - name: Download runtime package
+        uses: actions/download-artifact@v4
+        with:
+          name: QuestLinkRuntime-Web
+          path: runtime-download
+
+      - name: Assemble website downloads
         shell: bash
         run: |
-          cp questlink-android/app/build/outputs/apk/debug/app-debug.apk questlink-site/QuestLinkClient.apk
-          cp questlink-pc/bin/Release/net8.0-windows/win-x64/publish/QuestLinkPC.exe questlink-site/QuestLinkPC.exe
-          test -f questlink-site/QuestLinkClient.apk
-          test -f questlink-site/QuestLinkPC.exe
-          ls -lh questlink-site/QuestLinkClient.apk questlink-site/QuestLinkPC.exe
+          cp questlink-android/app/build/outputs/apk/debug/app-debug.apk questlink-site/QuestLinkClient-v7.9.apk
+
+          mkdir -p pc-package
+          cp questlink-pc/bin/Release/net8.0-windows/win-x64/publish/QuestLinkPC.exe pc-package/QuestLinkPC.exe
+          (cd pc-package && zip -q ../questlink-site/QuestLinkPC-v7.9.zip QuestLinkPC.exe)
+
+          cp runtime-download/QuestLinkRuntime-Windows-x64-v0.2.zip questlink-site/QuestLinkRuntime-Windows-x64-v0.2.zip
+
+          test -f questlink-site/QuestLinkClient-v7.9.apk
+          test -f questlink-site/QuestLinkPC-v7.9.zip
+          test -f questlink-site/QuestLinkRuntime-Windows-x64-v0.2.zip
+          ls -lh questlink-site/QuestLinkClient-v7.9.apk questlink-site/QuestLinkPC-v7.9.zip questlink-site/QuestLinkRuntime-Windows-x64-v0.2.zip
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
