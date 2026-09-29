@@ -1,0 +1,46 @@
+name: QuestLink PC Windows
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "questlink-pc/**"
+      - ".github/workflows/questlink-pc.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build-pc:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Publish QuestLink PC
+        shell: pwsh
+        run: |
+          dotnet publish questlink-pc/QuestLink.PC.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true
+
+      - name: Stage PC build
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Copy-Item "questlink-pc/bin/Release/net8.0-windows/win-x64/publish/QuestLinkPC.exe" "dist/QuestLinkPC.exe"
+          Compress-Archive -Path "dist/QuestLinkPC.exe" -DestinationPath "dist/QuestLinkPC-v7.9.zip" -Force
+
+      - name: Upload PC build
+        uses: actions/upload-artifact@v4
+        with:
+          name: QuestLinkPC-v7.9
+          path: |
+            dist/QuestLinkPC.exe
+            dist/QuestLinkPC-v7.9.zip
+          if-no-files-found: error
+          compression-level: 0
