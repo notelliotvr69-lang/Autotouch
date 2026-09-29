@@ -1,7 +1,10 @@
+#include <winsock2.h>
+#include <ws2tcpip.h>
 #include <windows.h>
 #include <unknwn.h>
 #include <d3d11.h>
 #include <dxgi1_2.h>
+#include <wincodec.h>
 
 #include <openxr/openxr.h>
 #include <openxr/openxr_platform.h>
@@ -9,12 +12,16 @@
 
 #include <algorithm>
 #include <atomic>
+#include <chrono>
+#include <cmath>
+#include <condition_variable>
 #include <cstring>
 #include <deque>
 #include <fstream>
 #include <map>
 #include <mutex>
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include <vector>
 
@@ -43,6 +50,7 @@ struct SwapchainState {
     std::vector<ID3D11Texture2D*> images;
     uint32_t nextAcquire = 0;
     int32_t acquired = -1;
+    int32_t lastReleased = -1;
     bool waited = false;
 };
 
@@ -66,6 +74,33 @@ std::unordered_map<XrAction, ActionState*> g_actions;
 std::map<std::string, XrPath> g_stringToPath;
 std::map<XrPath, std::string> g_pathToString;
 std::atomic<uint64_t> g_nextPath{1};
+
+struct StreamFrame {
+    uint64_t id = 0;
+    uint32_t width = 0;
+    uint32_t height = 0;
+    std::vector<uint8_t> bgra;
+};
+
+std::mutex g_streamMutex;
+std::condition_variable g_streamCv;
+StreamFrame g_latestFrame;
+uint64_t g_latestFrameVersion = 0;
+
+std::mutex g_headMutex;
+XrPosef g_headPose{{0.0f, 0.0f, 0.0f, 1.0f}, {0.0f, 1.6f, 0.0f}};
+bool g_headPoseValid = false;
+
+std::atomic<bool> g_bridgeRunning{false};
+std::atomic<bool> g_bridgeStarted{false};
+std::thread g_bridgeThread;
+SOCKET g_bridgeListen = INVALID_SOCKET;
+SOCKET g_bridgeClient = INVALID_SOCKET;
+
+constexpr uint16_t kStreamPort = 47991;
+constexpr uint32_t kEyeStreamWidth = 640;
+constexpr uint32_t kEyeStreamHeight = 672;
+
 
 void logLine(const std::string& text) {
     std::lock_guard<std::mutex> lock(g_logMutex);
@@ -140,6 +175,461 @@ DXGI_FORMAT toFormat(int64_t fmt) {
     return static_cast<DXGI_FORMAT>(fmt);
 }
 
+uint64_t hostToNetwork64(uint64_t value) {
+    const uint32_t high = htonl(static_cast<uint32_t>(value >> 32));
+    const uint32_t low = htonl(static_cast<uint32_t>(value & 0xffffffffULL));
+    return (static_cast<uint64_t>(low) << 32) | high;
+}
+
+bool sendAll(SOCKET s, const void* data, size_t bytes) {
+    const char* p = static_cast<const char*>(data);
+    while (bytes > 0) {
+        int chunk = static_cast<int>(std::min<size_t>(bytes, 1u << 20));
+        int sent = send(s, p, chunk, 0);
+        if (sent <= 0) return false;
+        p += sent;
+        bytes -= static_cast<size_t>(sent);
+    }
+    return true;
+}
+
+bool recvAll(SOCKET s, void* data, size_t bytes) {
+    char* p = static_cast<char*>(data);
+    while (bytes > 0) {
+        int chunk = static_cast<int>(std::min<size_t>(bytes, 1u << 20));
+        int got = recv(s, p, chunk, 0);
+        if (got <= 0) return false;
+        p += got;
+        bytes -= static_cast<size_t>(got);
+    }
+    return true;
+}
+
+float networkFloatToHost(const uint8_t* p) {
+    uint32_t u = 0;
+    memcpy(&u, p, sizeof(u));
+    u = ntohl(u);
+    float f = 0.0f;
+    memcpy(&f, &u, sizeof(f));
+    return f;
+}
+
+XrPosef currentHeadPose() {
+    std::lock_guard<std::mutex> lock(g_headMutex);
+    return g_headPose;
+}
+
+void setHeadPose(const XrPosef& pose) {
+    XrPosef normalized = pose;
+    const float qn = std::sqrt(
+        pose.orientation.x * pose.orientation.x +
+        pose.orientation.y * pose.orientation.y +
+        pose.orientation.z * pose.orientation.z +
+        pose.orientation.w * pose.orientation.w);
+
+    if (qn > 0.001f) {
+        normalized.orientation.x /= qn;
+        normalized.orientation.y /= qn;
+        normalized.orientation.z /= qn;
+        normalized.orientation.w /= qn;
+    } else {
+        normalized.orientation = {0, 0, 0, 1};
+    }
+
+    std::lock_guard<std::mutex> lock(g_headMutex);
+    g_headPose = normalized;
+    g_headPoseValid = true;
+}
+
+bool encodeJpeg(const StreamFrame& frame, std::vector<uint8_t>& jpeg) {
+    if (frame.bgra.empty() || frame.width == 0 || frame.height == 0) return false;
+
+    HRESULT initHr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+    const bool shouldUninit = SUCCEEDED(initHr);
+
+    IWICImagingFactory* factory = nullptr;
+    IStream* stream = nullptr;
+    IWICBitmapEncoder* encoder = nullptr;
+    IWICBitmapFrameEncode* frameEncode = nullptr;
+    IWICBitmap* bitmap = nullptr;
+
+    bool ok = false;
+
+    do {
+        HRESULT hr = CoCreateInstance(
+            CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER,
+            IID_PPV_ARGS(&factory));
+        if (FAILED(hr) || !factory) break;
+
+        hr = CreateStreamOnHGlobal(nullptr, TRUE, &stream);
+        if (FAILED(hr) || !stream) break;
+
+        hr = factory->CreateEncoder(GUID_ContainerFormatJpeg, nullptr, &encoder);
+        if (FAILED(hr) || !encoder) break;
+
+        hr = encoder->Initialize(stream, WICBitmapEncoderNoCache);
+        if (FAILED(hr)) break;
+
+        hr = encoder->CreateNewFrame(&frameEncode, nullptr);
+        if (FAILED(hr) || !frameEncode) break;
+
+        hr = frameEncode->Initialize(nullptr);
+        if (FAILED(hr)) break;
+
+        hr = frameEncode->SetSize(frame.width, frame.height);
+        if (FAILED(hr)) break;
+
+        WICPixelFormatGUID pixelFormat = GUID_WICPixelFormat24bppBGR;
+        hr = frameEncode->SetPixelFormat(&pixelFormat);
+        if (FAILED(hr)) break;
+
+        hr = factory->CreateBitmapFromMemory(
+            frame.width,
+            frame.height,
+            GUID_WICPixelFormat32bppBGRA,
+            frame.width * 4,
+            static_cast<UINT>(frame.bgra.size()),
+            const_cast<BYTE*>(frame.bgra.data()),
+            &bitmap);
+        if (FAILED(hr) || !bitmap) break;
+
+        hr = frameEncode->WriteSource(bitmap, nullptr);
+        if (FAILED(hr)) break;
+
+        hr = frameEncode->Commit();
+        if (FAILED(hr)) break;
+
+        hr = encoder->Commit();
+        if (FAILED(hr)) break;
+
+        STATSTG stat{};
+        hr = stream->Stat(&stat, STATFLAG_NONAME);
+        if (FAILED(hr) || stat.cbSize.QuadPart == 0 || stat.cbSize.QuadPart > 16 * 1024 * 1024) break;
+
+        LARGE_INTEGER zero{};
+        hr = stream->Seek(zero, STREAM_SEEK_SET, nullptr);
+        if (FAILED(hr)) break;
+
+        jpeg.resize(static_cast<size_t>(stat.cbSize.QuadPart));
+        ULONG readBytes = 0;
+        hr = stream->Read(jpeg.data(), static_cast<ULONG>(jpeg.size()), &readBytes);
+        if (FAILED(hr) || readBytes != jpeg.size()) break;
+
+        ok = true;
+    } while (false);
+
+    if (bitmap) bitmap->Release();
+    if (frameEncode) frameEncode->Release();
+    if (encoder) encoder->Release();
+    if (stream) stream->Release();
+    if (factory) factory->Release();
+    if (shouldUninit) CoUninitialize();
+
+    return ok;
+}
+
+bool copyProjectionEye(
+    SessionState* session,
+    const XrCompositionLayerProjectionView& view,
+    uint32_t eyeIndex,
+    std::vector<uint8_t>& target) {
+
+    auto* swapchain = getSwapchain(view.subImage.swapchain);
+    if (!session || !swapchain || swapchain->lastReleased < 0) return false;
+    if (swapchain->lastReleased >= static_cast<int32_t>(swapchain->images.size())) return false;
+
+    ID3D11Texture2D* source = swapchain->images[swapchain->lastReleased];
+    if (!source) return false;
+
+    D3D11_TEXTURE2D_DESC srcDesc{};
+    source->GetDesc(&srcDesc);
+
+    if (srcDesc.SampleDesc.Count != 1) return false;
+    if (srcDesc.Format != DXGI_FORMAT_R8G8B8A8_UNORM &&
+        srcDesc.Format != DXGI_FORMAT_R8G8B8A8_UNORM_SRGB &&
+        srcDesc.Format != DXGI_FORMAT_B8G8R8A8_UNORM) {
+        return false;
+    }
+
+    const int32_t offsetX = std::max<int32_t>(0, view.subImage.imageRect.offset.x);
+    const int32_t offsetY = std::max<int32_t>(0, view.subImage.imageRect.offset.y);
+    const uint32_t rectW = static_cast<uint32_t>(std::max<int32_t>(1, view.subImage.imageRect.extent.width));
+    const uint32_t rectH = static_cast<uint32_t>(std::max<int32_t>(1, view.subImage.imageRect.extent.height));
+
+    if (offsetX >= static_cast<int32_t>(srcDesc.Width) ||
+        offsetY >= static_cast<int32_t>(srcDesc.Height)) return false;
+
+    const uint32_t copyW = std::min<uint32_t>(rectW, srcDesc.Width - static_cast<uint32_t>(offsetX));
+    const uint32_t copyH = std::min<uint32_t>(rectH, srcDesc.Height - static_cast<uint32_t>(offsetY));
+
+    D3D11_TEXTURE2D_DESC stageDesc{};
+    stageDesc.Width = copyW;
+    stageDesc.Height = copyH;
+    stageDesc.MipLevels = 1;
+    stageDesc.ArraySize = 1;
+    stageDesc.Format = srcDesc.Format;
+    stageDesc.SampleDesc.Count = 1;
+    stageDesc.Usage = D3D11_USAGE_STAGING;
+    stageDesc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+
+    ID3D11Texture2D* staging = nullptr;
+    HRESULT hr = session->device->CreateTexture2D(&stageDesc, nullptr, &staging);
+    if (FAILED(hr) || !staging) return false;
+
+    D3D11_BOX box{};
+    box.left = static_cast<UINT>(offsetX);
+    box.top = static_cast<UINT>(offsetY);
+    box.front = 0;
+    box.right = box.left + copyW;
+    box.bottom = box.top + copyH;
+    box.back = 1;
+
+    const uint32_t arrayIndex = std::min<uint32_t>(view.subImage.imageArrayIndex, srcDesc.ArraySize - 1);
+    const UINT srcSubresource = D3D11CalcSubresource(0, arrayIndex, srcDesc.MipLevels);
+    session->context->CopySubresourceRegion(staging, 0, 0, 0, 0, source, srcSubresource, &box);
+
+    D3D11_MAPPED_SUBRESOURCE mapped{};
+    hr = session->context->Map(staging, 0, D3D11_MAP_READ, 0, &mapped);
+    if (FAILED(hr)) {
+        staging->Release();
+        return false;
+    }
+
+    const size_t required = static_cast<size_t>(kEyeStreamWidth * 2) * kEyeStreamHeight * 4;
+    if (target.size() != required) target.resize(required);
+
+    const uint32_t destXBase = eyeIndex * kEyeStreamWidth;
+
+    for (uint32_t y = 0; y < kEyeStreamHeight; ++y) {
+        const uint32_t sy = std::min<uint32_t>(copyH - 1, static_cast<uint32_t>((static_cast<uint64_t>(y) * copyH) / kEyeStreamHeight));
+        const uint8_t* srcRow = static_cast<const uint8_t*>(mapped.pData) + static_cast<size_t>(sy) * mapped.RowPitch;
+
+        for (uint32_t x = 0; x < kEyeStreamWidth; ++x) {
+            const uint32_t sx = std::min<uint32_t>(copyW - 1, static_cast<uint32_t>((static_cast<uint64_t>(x) * copyW) / kEyeStreamWidth));
+            const uint8_t* px = srcRow + static_cast<size_t>(sx) * 4;
+
+            const size_t di = (static_cast<size_t>(y) * (kEyeStreamWidth * 2) + destXBase + x) * 4;
+            if (srcDesc.Format == DXGI_FORMAT_B8G8R8A8_UNORM) {
+                target[di + 0] = px[0];
+                target[di + 1] = px[1];
+                target[di + 2] = px[2];
+            } else {
+                target[di + 0] = px[2];
+                target[di + 1] = px[1];
+                target[di + 2] = px[0];
+            }
+            target[di + 3] = 255;
+        }
+    }
+
+    session->context->Unmap(staging, 0);
+    staging->Release();
+    return true;
+}
+
+void captureProjectionFrame(SessionState* session, const XrFrameEndInfo* frameEndInfo) {
+    if (!session || !frameEndInfo) return;
+
+    // Keep the proof-of-life bridge light enough to test over normal Wi-Fi.
+    if ((session->frameIndex % 6) != 0) return;
+
+    const XrCompositionLayerProjection* projection = nullptr;
+    for (uint32_t i = 0; i < frameEndInfo->layerCount; ++i) {
+        const XrCompositionLayerBaseHeader* layer = frameEndInfo->layers[i];
+        if (layer && layer->type == XR_TYPE_COMPOSITION_LAYER_PROJECTION) {
+            projection = reinterpret_cast<const XrCompositionLayerProjection*>(layer);
+            break;
+        }
+    }
+
+    if (!projection || projection->viewCount == 0 || !projection->views) return;
+
+    StreamFrame frame;
+    frame.id = session->frameIndex;
+    frame.width = kEyeStreamWidth * 2;
+    frame.height = kEyeStreamHeight;
+    frame.bgra.resize(static_cast<size_t>(frame.width) * frame.height * 4);
+
+    bool left = copyProjectionEye(session, projection->views[0], 0, frame.bgra);
+    bool right = false;
+
+    if (projection->viewCount > 1) {
+        right = copyProjectionEye(session, projection->views[1], 1, frame.bgra);
+    } else if (left) {
+        for (uint32_t y = 0; y < frame.height; ++y) {
+            uint8_t* row = frame.bgra.data() + static_cast<size_t>(y) * frame.width * 4;
+            memcpy(row + kEyeStreamWidth * 4, row, kEyeStreamWidth * 4);
+        }
+        right = true;
+    }
+
+    if (!left || !right) return;
+
+    {
+        std::lock_guard<std::mutex> lock(g_streamMutex);
+        g_latestFrame = std::move(frame);
+        ++g_latestFrameVersion;
+    }
+    g_streamCv.notify_all();
+}
+
+void receiveHeadPoseLoop(SOCKET client, std::atomic<bool>& alive) {
+    while (g_bridgeRunning && alive.load()) {
+        char magic[4]{};
+        if (!recvAll(client, magic, sizeof(magic))) break;
+        if (memcmp(magic, "QLH1", 4) != 0) break;
+
+        uint8_t payload[7 * sizeof(uint32_t)]{};
+        if (!recvAll(client, payload, sizeof(payload))) break;
+
+        XrPosef pose{};
+        pose.orientation.x = networkFloatToHost(payload + 0);
+        pose.orientation.y = networkFloatToHost(payload + 4);
+        pose.orientation.z = networkFloatToHost(payload + 8);
+        pose.orientation.w = networkFloatToHost(payload + 12);
+        pose.position.x = networkFloatToHost(payload + 16);
+        pose.position.y = networkFloatToHost(payload + 20);
+        pose.position.z = networkFloatToHost(payload + 24);
+
+        setHeadPose(pose);
+    }
+
+    alive.store(false);
+    g_streamCv.notify_all();
+}
+
+void bridgeServerLoop() {
+    WSADATA wsa{};
+    if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) {
+        logLine("QuestLink bridge: WSAStartup failed");
+        g_bridgeRunning = false;
+        return;
+    }
+
+    SOCKET listenSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (listenSocket == INVALID_SOCKET) {
+        logLine("QuestLink bridge: socket() failed");
+        WSACleanup();
+        g_bridgeRunning = false;
+        return;
+    }
+
+    g_bridgeListen = listenSocket;
+
+    BOOL reuse = TRUE;
+    setsockopt(listenSocket, SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<const char*>(&reuse), sizeof(reuse));
+
+    sockaddr_in addr{};
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    addr.sin_port = htons(kStreamPort);
+
+    if (bind(listenSocket, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) == SOCKET_ERROR ||
+        listen(listenSocket, 1) == SOCKET_ERROR) {
+        logLine("QuestLink bridge: failed to bind/listen on port 47991");
+        closesocket(listenSocket);
+        g_bridgeListen = INVALID_SOCKET;
+        WSACleanup();
+        g_bridgeRunning = false;
+        return;
+    }
+
+    logLine("QuestLink bridge: listening on TCP 47991");
+
+    while (g_bridgeRunning) {
+        SOCKET client = accept(listenSocket, nullptr, nullptr);
+        if (client == INVALID_SOCKET) {
+            if (!g_bridgeRunning) break;
+            continue;
+        }
+
+        g_bridgeClient = client;
+        logLine("QuestLink bridge: Quest stream client connected");
+
+        int noDelay = 1;
+        setsockopt(client, IPPROTO_TCP, TCP_NODELAY, reinterpret_cast<const char*>(&noDelay), sizeof(noDelay));
+
+        std::atomic<bool> alive{true};
+        std::thread receiver(receiveHeadPoseLoop, client, std::ref(alive));
+        uint64_t lastVersion = 0;
+
+        while (g_bridgeRunning && alive.load()) {
+            StreamFrame frame;
+            {
+                std::unique_lock<std::mutex> lock(g_streamMutex);
+                g_streamCv.wait_for(lock, std::chrono::milliseconds(250), [&] {
+                    return !g_bridgeRunning || !alive.load() || g_latestFrameVersion > lastVersion;
+                });
+
+                if (!g_bridgeRunning || !alive.load()) break;
+                if (g_latestFrameVersion <= lastVersion) continue;
+
+                frame = g_latestFrame;
+                lastVersion = g_latestFrameVersion;
+            }
+
+            std::vector<uint8_t> jpeg;
+            if (!encodeJpeg(frame, jpeg)) continue;
+
+            const char magic[4] = {'Q', 'L', 'F', '1'};
+            uint32_t nw = htonl(frame.width);
+            uint32_t nh = htonl(frame.height);
+            uint64_t nid = hostToNetwork64(frame.id);
+            uint32_t ns = htonl(static_cast<uint32_t>(jpeg.size()));
+
+            if (!sendAll(client, magic, sizeof(magic)) ||
+                !sendAll(client, &nw, sizeof(nw)) ||
+                !sendAll(client, &nh, sizeof(nh)) ||
+                !sendAll(client, &nid, sizeof(nid)) ||
+                !sendAll(client, &ns, sizeof(ns)) ||
+                !sendAll(client, jpeg.data(), jpeg.size())) {
+                alive.store(false);
+                break;
+            }
+        }
+
+        shutdown(client, SD_BOTH);
+        closesocket(client);
+        g_bridgeClient = INVALID_SOCKET;
+
+        if (receiver.joinable()) receiver.join();
+        logLine("QuestLink bridge: Quest stream client disconnected");
+    }
+
+    closesocket(listenSocket);
+    g_bridgeListen = INVALID_SOCKET;
+    WSACleanup();
+}
+
+void startBridgeServer() {
+    bool expected = false;
+    if (!g_bridgeStarted.compare_exchange_strong(expected, true)) return;
+
+    g_bridgeRunning = true;
+    g_bridgeThread = std::thread(bridgeServerLoop);
+}
+
+void stopBridgeServer() {
+    if (!g_bridgeStarted.load()) return;
+
+    g_bridgeRunning = false;
+    g_streamCv.notify_all();
+
+    if (g_bridgeClient != INVALID_SOCKET) {
+        shutdown(g_bridgeClient, SD_BOTH);
+        closesocket(g_bridgeClient);
+        g_bridgeClient = INVALID_SOCKET;
+    }
+
+    if (g_bridgeListen != INVALID_SOCKET) {
+        closesocket(g_bridgeListen);
+        g_bridgeListen = INVALID_SOCKET;
+    }
+
+    if (g_bridgeThread.joinable()) g_bridgeThread.join();
+    g_bridgeStarted = false;
+}
+
 } // namespace
 
 extern "C" {
@@ -191,6 +681,7 @@ static XrResult XRAPI_CALL ql_xrDestroyInstance(XrInstance instance) {
     if (!g_sessions.empty()) return XR_ERROR_CALL_ORDER_INVALID;
     g_instance = XR_NULL_HANDLE;
     g_events.clear();
+    stopBridgeServer();
     logLine("xrDestroyInstance");
     return XR_SUCCESS;
 }
@@ -200,8 +691,8 @@ static XrResult XRAPI_CALL ql_xrGetInstanceProperties(
     XrInstanceProperties* properties) {
     if (!validInstance(instance)) return XR_ERROR_HANDLE_INVALID;
     if (!properties) return XR_ERROR_VALIDATION_FAILURE;
-    properties->runtimeVersion = XR_MAKE_VERSION(0, 2, 0);
-    copyText(properties->runtimeName, "QuestLink OpenXR Runtime v0.2");
+    properties->runtimeVersion = XR_MAKE_VERSION(0, 3, 0);
+    copyText(properties->runtimeName, "QuestLink OpenXR Runtime v0.3");
     return XR_SUCCESS;
 }
 
@@ -351,7 +842,8 @@ static XrResult XRAPI_CALL ql_xrCreateSession(
         pushSessionState(handle, XR_SESSION_STATE_READY);
     }
 
-    logLine("xrCreateSession: D3D11 session created");
+    startBridgeServer();
+    logLine("xrCreateSession: D3D11 session created; stream bridge available on TCP 47991");
     return XR_SUCCESS;
 }
 
@@ -498,8 +990,11 @@ static XrResult XRAPI_CALL ql_xrLocateSpace(
         XR_SPACE_LOCATION_POSITION_TRACKED_BIT;
 
     location->pose = s->pose;
-    if (s->type == XR_REFERENCE_SPACE_TYPE_VIEW && b->type != XR_REFERENCE_SPACE_TYPE_VIEW)
-        location->pose.position.y += 1.6f;
+    if (s->type == XR_REFERENCE_SPACE_TYPE_VIEW && b->type != XR_REFERENCE_SPACE_TYPE_VIEW) {
+        XrPosef head = currentHeadPose();
+        location->pose.orientation = head.orientation;
+        location->pose.position = head.position;
+    }
     return XR_SUCCESS;
 }
 
@@ -525,9 +1020,14 @@ static XrResult XRAPI_CALL ql_xrLocateViews(
     if (capacityInput == 0) return XR_SUCCESS;
     if (!views || capacityInput < 2) return XR_ERROR_SIZE_INSUFFICIENT;
 
+    XrPosef head = currentHeadPose();
     for (uint32_t i = 0; i < 2; ++i) {
-        views[i].pose.orientation = {0, 0, 0, 1};
-        views[i].pose.position = {(i == 0 ? -0.032f : 0.032f), 1.6f, 0.0f};
+        views[i].pose.orientation = head.orientation;
+        views[i].pose.position = {
+            head.position.x + (i == 0 ? -0.032f : 0.032f),
+            head.position.y,
+            head.position.z
+        };
         views[i].fov.angleLeft = -0.9f;
         views[i].fov.angleRight = 0.9f;
         views[i].fov.angleUp = 0.9f;
@@ -661,6 +1161,7 @@ static XrResult XRAPI_CALL ql_xrReleaseSwapchainImage(
     auto* s = getSwapchain(swapchain);
     if (!s) return XR_ERROR_HANDLE_INVALID;
     if (s->acquired < 0 || !s->waited) return XR_ERROR_CALL_ORDER_INVALID;
+    s->lastReleased = s->acquired;
     s->acquired = -1;
     s->waited = false;
     return XR_SUCCESS;
@@ -703,6 +1204,7 @@ static XrResult XRAPI_CALL ql_xrEndFrame(
 
     s->frameBegun = false;
     ++s->frameIndex;
+    captureProjectionFrame(s, frameEndInfo);
     if ((s->frameIndex % 300) == 1) {
         logLine("xrEndFrame: accepted frame " + std::to_string(s->frameIndex) +
                 ", layers=" + std::to_string(frameEndInfo->layerCount));
@@ -1010,7 +1512,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrNegotiateLoaderRuntimeInterface(
     runtimeRequest->runtimeApiVersion = XR_CURRENT_API_VERSION;
     runtimeRequest->getInstanceProcAddr = ql_xrGetInstanceProcAddr;
 
-    logLine("xrNegotiateLoaderRuntimeInterface: QuestLink v0.2");
+    logLine("xrNegotiateLoaderRuntimeInterface: QuestLink v0.3");
     return XR_SUCCESS;
 }
 
