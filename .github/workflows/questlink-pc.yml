@@ -8,7 +8,7 @@ on:
       - ".github/workflows/questlink-pc.yml"
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build-pc:
@@ -44,3 +44,15 @@ jobs:
             dist/QuestLinkPC-v7.9.1.zip
           if-no-files-found: error
           compression-level: 0
+
+      - name: Publish GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "questlink-pc-v7.9.1"
+          gh release view $tag --repo "${{ github.repository }}" *> $null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $tag --repo "${{ github.repository }}" --title "QuestLink PC v7.9.1" --notes "QuestLink PC v7.9.1 LAN server fix and GTAG mod/plugin detection."
+          }
+          gh release upload $tag "dist/QuestLinkPC-v7.9.1.zip" --repo "${{ github.repository }}" --clobber
