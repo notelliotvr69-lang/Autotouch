@@ -40,6 +40,9 @@ public sealed class MainForm : Form
     private readonly Label runtimePath = new();
     private readonly Button refreshRuntime = new();
     private readonly Button launchGtagQuick = new();
+    private readonly ListBox gtagMods = new();
+    private readonly Label gtagModSummary = new();
+    private readonly Button refreshGtagMods = new();
 
     private readonly CancellationTokenSource cts = new();
     private List<VrGame> currentGames = new();
@@ -72,10 +75,12 @@ public sealed class MainForm : Form
         var home = new TabPage("Connection") { BackColor = BackColor, ForeColor = ForeColor };
         var library = new TabPage("PCVR Library") { BackColor = BackColor, ForeColor = ForeColor };
         var steamvr = new TabPage("SteamVR Settings") { BackColor = BackColor, ForeColor = ForeColor };
+        var mods = new TabPage("GTAG Mods") { BackColor = BackColor, ForeColor = ForeColor };
 
         tabs.TabPages.Add(home);
         tabs.TabPages.Add(library);
         tabs.TabPages.Add(steamvr);
+        tabs.TabPages.Add(mods);
         Controls.Add(tabs);
 
         var title = MakeLabel("QuestLink PC V" + Version, 24, true);
@@ -213,7 +218,34 @@ public sealed class MainForm : Form
         selectHint.SetBounds(28, 455, 760, 40);
         steamvr.Controls.Add(selectHint);
 
+        var modsTitle = MakeLabel("Gorilla Tag Mods / Plugins", 18, true);
+        modsTitle.SetBounds(22, 22, 420, 36);
+        mods.Controls.Add(modsTitle);
+
+        gtagModSummary.SetBounds(24, 68, 760, 34);
+        gtagModSummary.Font = new Font("Segoe UI", 11f, FontStyle.Bold);
+        mods.Controls.Add(gtagModSummary);
+
+        gtagMods.SetBounds(22, 116, 620, 410);
+        gtagMods.BackColor = Color.FromArgb(20, 23, 30);
+        gtagMods.ForeColor = Color.White;
+        gtagMods.BorderStyle = BorderStyle.FixedSingle;
+        mods.Controls.Add(gtagMods);
+
+        refreshGtagMods.Text = "Rescan GTAG Mods";
+        refreshGtagMods.SetBounds(662, 116, 170, 42);
+        refreshGtagMods.Click += (_, _) => RefreshGtagMods();
+        mods.Controls.Add(refreshGtagMods);
+
+        var modsNote = MakeLabel(
+            "QuestLink scans Gorilla Tag's BepInEx folder locally. It lists plugin DLLs and patcher DLLs; it does not modify them.",
+            9.5f, false);
+        modsNote.SetBounds(662, 176, 175, 150);
+        modsNote.AutoSize = false;
+        mods.Controls.Add(modsNote);
+
         UpdateScaleLabels();
+        RefreshGtagMods();
     }
 
     private static Label MakeLabel(string text, float size, bool bold)
@@ -231,6 +263,32 @@ public sealed class MainForm : Form
     {
         worldScaleValue.Text = worldScale.Value + "%";
         renderScaleValue.Text = renderScale.Value + "%";
+    }
+
+    private void RefreshGtagMods()
+    {
+        var scan = GtagModScanner.Scan();
+
+        gtagMods.DataSource = null;
+        gtagMods.DataSource = scan.Entries;
+
+        if (!scan.GtagFound)
+        {
+            gtagModSummary.Text = "Gorilla Tag not found.";
+            gtagModSummary.ForeColor = Color.Orange;
+            return;
+        }
+
+        if (!scan.BepInExInstalled)
+        {
+            gtagModSummary.Text = "Gorilla Tag found • BepInEx not detected";
+            gtagModSummary.ForeColor = Color.Orange;
+            return;
+        }
+
+        gtagModSummary.Text =
+            $"BepInEx detected • {scan.PluginCount} plugin DLL(s) • {scan.PatcherCount} patcher DLL(s)";
+        gtagModSummary.ForeColor = Color.LightGreen;
     }
 
     private void RefreshRuntimeStatus()
@@ -409,6 +467,8 @@ public sealed class MainForm : Form
                             "questlink_runtime_detection",
                             "questlink_runtime_status",
                             "gtag_quick_launch",
+                            "gtag_mod_scan",
+                            "gtag_plugin_list",
                             "meta_pcvr_library",
                             "bepinex_detection",
                             "steamvr_world_scale",
@@ -424,6 +484,19 @@ public sealed class MainForm : Form
                         ok = true,
                         active = QuestLinkRuntimeRegistry.IsQuestLinkActive(),
                         active_runtime = QuestLinkRuntimeRegistry.GetActiveRuntime()
+                    };
+                }
+                else if (cmd == "gtag_mods")
+                {
+                    var scan = GtagModScanner.Scan();
+                    response = new
+                    {
+                        ok = true,
+                        gtag_found = scan.GtagFound,
+                        bepinex = scan.BepInExInstalled,
+                        plugin_count = scan.PluginCount,
+                        patcher_count = scan.PatcherCount,
+                        entries = scan.Entries
                     };
                 }
                 else if (cmd == "list_games")
@@ -643,6 +716,75 @@ public static class Launcher
             {
                 try { process.Kill(entireProcessTree: true); } catch { }
             }
+        }
+    }
+}
+
+public record GtagModScan(
+    bool GtagFound,
+    bool BepInExInstalled,
+    int PluginCount,
+    int PatcherCount,
+    List<string> Entries);
+
+public static class GtagModScanner
+{
+    public static GtagModScan Scan()
+    {
+        var root = SteamVrLibrary.GetInstallDirectory("1533390");
+        if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root))
+            return new GtagModScan(false, false, 0, 0, new List<string>());
+
+        var bepinex = Path.Combine(root, "BepInEx");
+        var installed = Directory.Exists(bepinex) &&
+                        (Directory.Exists(Path.Combine(bepinex, "plugins")) ||
+                         File.Exists(Path.Combine(root, "winhttp.dll")));
+
+        if (!installed)
+            return new GtagModScan(true, false, 0, 0, new List<string>());
+
+        var entries = new List<string>();
+        int plugins = 0;
+        int patchers = 0;
+
+        ScanDllFolder(Path.Combine(bepinex, "plugins"), "Plugin", entries, ref plugins);
+        ScanDllFolder(Path.Combine(bepinex, "patchers"), "Patcher", entries, ref patchers);
+
+        if (entries.Count == 0)
+            entries.Add("BepInEx is installed, but no plugin/patcher DLLs were found.");
+
+        return new GtagModScan(true, true, plugins, patchers, entries);
+    }
+
+    private static void ScanDllFolder(
+        string folder,
+        string kind,
+        List<string> entries,
+        ref int count)
+    {
+        if (!Directory.Exists(folder))
+            return;
+
+        try
+        {
+            foreach (var file in Directory.EnumerateFiles(folder, "*.dll", SearchOption.AllDirectories)
+                                          .OrderBy(Path.GetFileName, StringComparer.OrdinalIgnoreCase))
+            {
+                count++;
+                var relative = Path.GetRelativePath(folder, file);
+                entries.Add($"{kind}: {relative}");
+            }
+
+            foreach (var file in Directory.EnumerateFiles(folder, "*.disabled", SearchOption.AllDirectories)
+                                          .OrderBy(Path.GetFileName, StringComparer.OrdinalIgnoreCase))
+            {
+                var relative = Path.GetRelativePath(folder, file);
+                entries.Add($"Disabled: {relative}");
+            }
+        }
+        catch (Exception ex)
+        {
+            entries.Add($"{kind} scan error: {ex.Message}");
         }
     }
 }
