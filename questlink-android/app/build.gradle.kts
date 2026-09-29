@@ -10,8 +10,8 @@ android {
         applicationId = "com.questtools.questlink"
         minSdk = 32
         targetSdk = 35
-        versionCode = 11
-        versionName = "7.10"
+        versionCode = 12
+        versionName = "7.11"
     }
 
     buildTypes {
