@@ -125,7 +125,7 @@
       <div class="logo">Q</div>
       <div>
         <h1>QuestLink</h1>
-        <div class="kicker">Quest client V7.9 • PC V7.9.1 • Runtime V0.2</div>
+        <div class="kicker">Quest client V7.10 • PC V7.9.1 • Runtime V0.3</div>
       </div>
     </div>
 
@@ -145,10 +145,10 @@
       </div>
 
       <div class="downloads">
-        <a class="download primary" href="./QuestLinkClient-v7.9.apk" download="QuestLinkClient-v7.9.apk">
+        <a class="download primary" href="https://github.com/notelliotvr69-lang/Autotouch/releases/download/questlink-quest-v7.10/QuestLinkClient-v7.10.apk">
           <div>
             <h2>Quest App</h2>
-            <p>Headset launcher with PC connection, runtime status, PCVR library, GTAG plugin details, and remote launch controls.</p>
+            <p>Quest V7.10 headset client with PC connection, PCVR library, GTAG plugin details, live stereo bridge preview, and Quest orientation return.</p>
           </div>
           <span class="button">Download APK</span>
         </a>
@@ -161,10 +161,10 @@
           <span class="button">Download PC ZIP</span>
         </a>
 
-        <a class="download" href="./QuestLinkRuntime-Windows-x64-v0.2.zip" download="QuestLinkRuntime-Windows-x64-v0.2.zip">
+        <a class="download" href="https://github.com/notelliotvr69-lang/Autotouch/releases/download/questlink-runtime-v0.3/QuestLinkRuntime-Windows-x64-v0.3.zip">
           <div>
             <h2>OpenXR Runtime</h2>
-            <p>QuestLink V0.2 D3D11 OpenXR runtime prototype with session, swapchain, frame-loop, and launcher integration.</p>
+            <p>QuestLink Runtime V0.3 with D3D11 OpenXR sessions plus the first PC-to-Quest stereo frame bridge on TCP 47991.</p>
           </div>
           <span class="button">Download Runtime ZIP</span>
         </a>
@@ -178,22 +178,21 @@
         <li>Run the QuestLink PC app and note the LAN IP it shows.</li>
         <li>Install/open the Quest APK and enter that PC IP.</li>
         <li>The Quest launcher loads runtime status, PCVR games, and Gorilla Tag mod/plugin details.</li>
-        <li>Launch Gorilla Tag with QuestLink or launch another detected PCVR title from the headset.</li>
+        <li>Launch Gorilla Tag with QuestLink. Quest V7.10 automatically waits for the runtime stream on TCP 47991.</li>
       </ol>
     </section>
 
     <section>
       <h2>Streaming status</h2>
       <div class="status">
-        The launcher/control path is being built now. The actual PC-rendered VR video stream plus live Quest head/controller tracking bridge is still the next major client/runtime milestone.
+        The first end-to-end bridge test is now included: OpenXR projection frames are sent from the PC runtime to Quest V7.10, and Quest orientation is sent back to the runtime. This is still a low-frame-rate JPEG preview bridge, not final Virtual Desktop-quality streaming.
       </div>
     </section>
 
     <section>
       <h2>Heads up</h2>
       <p class="small">
-        QuestLink V0.2 is still a prototype runtime. The website does not claim full Virtual Desktop-style streaming is finished yet.
-        The goal is the same flow, but the video encoder/decoder and live tracking transport still need to be connected.
+        QuestLink V0.3 is still a prototype. Full low-latency immersive streaming, hardware H.264/H.265 encoding, controller tracking, and final compositor integration are not finished yet.
       </p>
     </section>
   </main>
