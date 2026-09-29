@@ -24,6 +24,9 @@ target_link_libraries(QuestLinkOpenXRRuntime PRIVATE
     d3d11
     dxgi
     dxguid
+    ws2_32
+    windowscodecs
+    ole32
 )
 
 if(MSVC)
