@@ -24,6 +24,8 @@
 #include <thread>
 #include <unordered_map>
 #include <vector>
+#include "../questlink-common/protocol.h"
+#include "h264_encoder.h"
 
 namespace {
 
@@ -38,11 +40,15 @@ struct SessionState {
     bool frameBegun = false;
     XrSessionState state = XR_SESSION_STATE_IDLE;
     uint64_t frameIndex = 0;
+    XrTime nextFrame = 0;
+    std::vector<XrActionSet> attached;
 };
 
 struct SpaceState {
     XrReferenceSpaceType type = XR_REFERENCE_SPACE_TYPE_LOCAL;
     XrPosef pose{};
+    XrAction action = XR_NULL_HANDLE;
+    XrPath subaction = XR_NULL_PATH;
 };
 
 struct SwapchainState {
@@ -55,8 +61,13 @@ struct SwapchainState {
 };
 
 struct ActionSetState {};
+struct InputValue { bool active=false, boolean=false, changed=false; float scalar=0; XrVector2f vector{}; XrTime time=0; };
 struct ActionState {
     XrActionType type = XR_ACTION_TYPE_BOOLEAN_INPUT;
+    XrActionSet owner=XR_NULL_HANDLE;
+    std::vector<XrPath> subactions;
+    std::vector<std::string> bindings;
+    InputValue values[3]; // left, right, aggregate
 };
 
 InstanceState g_instanceState;
@@ -80,6 +91,7 @@ struct StreamFrame {
     uint32_t width = 0;
     uint32_t height = 0;
     std::vector<uint8_t> bgra;
+    std::array<ql::Eye,2> eyes;
 };
 
 std::mutex g_streamMutex;
@@ -87,9 +99,43 @@ std::condition_variable g_streamCv;
 StreamFrame g_latestFrame;
 uint64_t g_latestFrameVersion = 0;
 
-std::mutex g_headMutex;
-XrPosef g_headPose{{0.0f, 0.0f, 0.0f, 1.0f}, {0.0f, 1.6f, 0.0f}};
-bool g_headPoseValid = false;
+std::mutex g_trackingMutex;
+ql::Tracking g_tracking;
+std::chrono::steady_clock::time_point g_trackingTime{};
+std::atomic<bool> g_clientConnected{false};
+ql::Tracking trackingSnapshot() {
+    std::lock_guard<std::mutex> lock(g_trackingMutex);
+    auto t=g_tracking;
+    if(!g_clientConnected || std::chrono::steady_clock::now()-g_trackingTime>std::chrono::milliseconds(250)) {
+        t.headFlags=0;t.focused=0;for(auto& h:t.hands){h.gripFlags=0;h.aimFlags=0;h.buttons=0;h.trigger=0;h.squeeze=0;h.stick={};}
+    }
+    return t;
+}
+int handForPath(XrPath path) {
+    auto it=g_pathToString.find(path);if(it==g_pathToString.end())return -1;
+    if(it->second=="/user/hand/left")return 0;if(it->second=="/user/hand/right")return 1;return -1;
+}
+bool worldSpace(SpaceState* s,const ql::Tracking& t,XrPosef& pose) {
+    if(!s)return false;
+    pose=s->pose;
+    if(s->action!=XR_NULL_HANDLE) {
+        auto a=g_actions.find(s->action);if(a==g_actions.end())return false;
+        int requested=handForPath(s->subaction);
+        for(auto& binding:a->second->bindings) {
+            int h=binding.find("/user/hand/left/")==0?0:binding.find("/user/hand/right/")==0?1:-1;
+            if(h<0||(requested>=0&&h!=requested))continue;
+            bool aim=binding.find("/aim/pose")!=std::string::npos;
+            if(binding.find("/pose")==std::string::npos)continue;
+            const auto& hand=t.hands[h];
+            if(!t.focused||(aim?hand.aimFlags:hand.gripFlags)!=ql::Tracked)return false;
+            pose=ql::compose(aim?hand.aim:hand.grip,s->pose);return true;
+        }
+        return false;
+    }
+    if(s->type==XR_REFERENCE_SPACE_TYPE_VIEW){pose=ql::compose(t.head,s->pose);return t.headFlags==ql::Tracked;}
+    // Both LOCAL and STAGE share the Quest's stage origin in protocol 2.
+    return true;
+}
 
 std::atomic<bool> g_bridgeRunning{false};
 std::atomic<bool> g_bridgeStarted{false};
@@ -145,7 +191,7 @@ void pushSessionState(XrSession session, XrSessionState state) {
     LARGE_INTEGER qpc{}, freq{};
     QueryPerformanceCounter(&qpc);
     QueryPerformanceFrequency(&freq);
-    e.time = static_cast<XrTime>((qpc.QuadPart * 1000000000LL) / freq.QuadPart);
+    e.time = static_cast<XrTime>((qpc.QuadPart / freq.QuadPart)*1000000000LL + (qpc.QuadPart % freq.QuadPart)*1000000000LL/freq.QuadPart);
     g_events.push_back(e);
     if (auto* s = getSession(session)) s->state = state;
 }
@@ -154,7 +200,7 @@ XrTime nowNs() {
     LARGE_INTEGER qpc{}, freq{};
     QueryPerformanceCounter(&qpc);
     QueryPerformanceFrequency(&freq);
-    return static_cast<XrTime>((qpc.QuadPart * 1000000000LL) / freq.QuadPart);
+    return static_cast<XrTime>((qpc.QuadPart / freq.QuadPart)*1000000000LL + (qpc.QuadPart % freq.QuadPart)*1000000000LL/freq.QuadPart);
 }
 
 bool isSupportedExtension(const char* name) {
@@ -203,42 +249,6 @@ bool recvAll(SOCKET s, void* data, size_t bytes) {
         bytes -= static_cast<size_t>(got);
     }
     return true;
-}
-
-float networkFloatToHost(const uint8_t* p) {
-    uint32_t u = 0;
-    memcpy(&u, p, sizeof(u));
-    u = ntohl(u);
-    float f = 0.0f;
-    memcpy(&f, &u, sizeof(f));
-    return f;
-}
-
-XrPosef currentHeadPose() {
-    std::lock_guard<std::mutex> lock(g_headMutex);
-    return g_headPose;
-}
-
-void setHeadPose(const XrPosef& pose) {
-    XrPosef normalized = pose;
-    const float qn = std::sqrt(
-        pose.orientation.x * pose.orientation.x +
-        pose.orientation.y * pose.orientation.y +
-        pose.orientation.z * pose.orientation.z +
-        pose.orientation.w * pose.orientation.w);
-
-    if (qn > 0.001f) {
-        normalized.orientation.x /= qn;
-        normalized.orientation.y /= qn;
-        normalized.orientation.z /= qn;
-        normalized.orientation.w /= qn;
-    } else {
-        normalized.orientation = {0, 0, 0, 1};
-    }
-
-    std::lock_guard<std::mutex> lock(g_headMutex);
-    g_headPose = normalized;
-    g_headPoseValid = true;
 }
 
 bool encodeJpeg(const StreamFrame& frame, std::vector<uint8_t>& jpeg) {
@@ -430,8 +440,7 @@ bool copyProjectionEye(
 void captureProjectionFrame(SessionState* session, const XrFrameEndInfo* frameEndInfo) {
     if (!session || !frameEndInfo) return;
 
-    // Keep the proof-of-life bridge light enough to test over normal Wi-Fi.
-    if ((session->frameIndex % 6) != 0) return;
+    if (!g_clientConnected || trackingSnapshot().headFlags != ql::Tracked) return;
 
     const XrCompositionLayerProjection* projection = nullptr;
     for (uint32_t i = 0; i < frameEndInfo->layerCount; ++i) {
@@ -463,7 +472,10 @@ void captureProjectionFrame(SessionState* session, const XrFrameEndInfo* frameEn
         right = true;
     }
 
-    if (!left || !right) return;
+    if (!left || !right || projection->viewCount!=2) return;
+    XrPosef origin;
+    if(!worldSpace(getSpace(projection->space),trackingSnapshot(),origin))return;
+    for(int i=0;i<2;++i){frame.eyes[i].pose=ql::compose(origin,projection->views[i].pose);frame.eyes[i].fov=projection->views[i].fov;}
 
     {
         std::lock_guard<std::mutex> lock(g_streamMutex);
@@ -474,28 +486,16 @@ void captureProjectionFrame(SessionState* session, const XrFrameEndInfo* frameEn
 }
 
 void receiveHeadPoseLoop(SOCKET client, std::atomic<bool>& alive) {
-    while (g_bridgeRunning && alive.load()) {
-        char magic[4]{};
-        if (!recvAll(client, magic, sizeof(magic))) break;
-        if (memcmp(magic, "QLH1", 4) != 0) break;
-
-        uint8_t payload[7 * sizeof(uint32_t)]{};
-        if (!recvAll(client, payload, sizeof(payload))) break;
-
-        XrPosef pose{};
-        pose.orientation.x = networkFloatToHost(payload + 0);
-        pose.orientation.y = networkFloatToHost(payload + 4);
-        pose.orientation.z = networkFloatToHost(payload + 8);
-        pose.orientation.w = networkFloatToHost(payload + 12);
-        pose.position.x = networkFloatToHost(payload + 16);
-        pose.position.y = networkFloatToHost(payload + 20);
-        pose.position.z = networkFloatToHost(payload + 24);
-
-        setHeadPose(pose);
+    while(g_bridgeRunning && alive) {
+        uint8_t payload[ql::TrackingBytes];
+        if(!recvAll(client,payload,sizeof(payload)))break;
+        try {
+            auto t=ql::decodeTracking(payload,sizeof(payload));
+            std::lock_guard<std::mutex> lock(g_trackingMutex);
+            g_tracking=t;g_trackingTime=std::chrono::steady_clock::now();
+        } catch(const std::exception& e){logLine(e.what());break;}
     }
-
-    alive.store(false);
-    g_streamCv.notify_all();
+    alive=false;g_clientConnected=false;g_streamCv.notify_all();
 }
 
 void bridgeServerLoop() {
@@ -549,6 +549,16 @@ void bridgeServerLoop() {
         int noDelay = 1;
         setsockopt(client, IPPROTO_TCP, TCP_NODELAY, reinterpret_cast<const char*>(&noDelay), sizeof(noDelay));
 
+        DWORD timeout=2000;
+        setsockopt(client,SOL_SOCKET,SO_RCVTIMEO,reinterpret_cast<char*>(&timeout),sizeof(timeout));
+        setsockopt(client,SOL_SOCKET,SO_SNDTIMEO,reinterpret_cast<char*>(&timeout),sizeof(timeout));
+        uint32_t hello=0;
+        if(!recvAll(client,&hello,4)||ntohl(hello)!=ql::HelloMagic){closesocket(client);g_bridgeClient=INVALID_SOCKET;continue;}
+        {std::lock_guard<std::mutex> lock(g_trackingMutex);g_tracking={};g_trackingTime={};}
+        g_clientConnected=true;
+        ql::H264Encoder encoder;
+        bool h264=encoder.open(kEyeStreamWidth*2,kEyeStreamHeight,72,12000000);
+        logLine(h264?"Video encoder: H264":"Video encoder unavailable: JPEG fallback");
         std::atomic<bool> alive{true};
         std::thread receiver(receiveHeadPoseLoop, client, std::ref(alive));
         uint64_t lastVersion = 0;
@@ -568,25 +578,16 @@ void bridgeServerLoop() {
                 lastVersion = g_latestFrameVersion;
             }
 
-            std::vector<uint8_t> jpeg;
-            if (!encodeJpeg(frame, jpeg)) continue;
-
-            const char magic[4] = {'Q', 'L', 'F', '1'};
-            uint32_t nw = htonl(frame.width);
-            uint32_t nh = htonl(frame.height);
-            uint64_t nid = hostToNetwork64(frame.id);
-            uint32_t ns = htonl(static_cast<uint32_t>(jpeg.size()));
-
-            if (!sendAll(client, magic, sizeof(magic)) ||
-                !sendAll(client, &nw, sizeof(nw)) ||
-                !sendAll(client, &nh, sizeof(nh)) ||
-                !sendAll(client, &nid, sizeof(nid)) ||
-                !sendAll(client, &ns, sizeof(ns)) ||
-                !sendAll(client, jpeg.data(), jpeg.size())) {
-                alive.store(false);
-                break;
-            }
+            std::vector<uint8_t> encoded;
+            bool encodedOk=h264?encoder.encode(frame.bgra,encoded):encodeJpeg(frame,encoded);
+            if(!encodedOk){logLine("Video encoding failed; reconnect required");alive=false;break;}
+            ql::VideoHeader header;
+            header.width=frame.width;header.height=frame.height;header.id=frame.id;
+            header.codec=h264?2:1;header.bytes=static_cast<uint32_t>(encoded.size());header.eyes=frame.eyes;
+            auto packet=ql::encode(header);
+            if(!sendAll(client,packet.data(),packet.size())||!sendAll(client,encoded.data(),encoded.size())){alive=false;break;}
         }
+        g_clientConnected=false;
 
         shutdown(client, SD_BOTH);
         closesocket(client);
@@ -596,7 +597,7 @@ void bridgeServerLoop() {
         logLine("QuestLink bridge: Quest stream client disconnected");
     }
 
-    closesocket(listenSocket);
+    if (g_bridgeListen != INVALID_SOCKET) closesocket(listenSocket);
     g_bridgeListen = INVALID_SOCKET;
     WSACleanup();
 }
@@ -617,8 +618,7 @@ void stopBridgeServer() {
 
     if (g_bridgeClient != INVALID_SOCKET) {
         shutdown(g_bridgeClient, SD_BOTH);
-        closesocket(g_bridgeClient);
-        g_bridgeClient = INVALID_SOCKET;
+
     }
 
     if (g_bridgeListen != INVALID_SOCKET) {
@@ -691,8 +691,8 @@ static XrResult XRAPI_CALL ql_xrGetInstanceProperties(
     XrInstanceProperties* properties) {
     if (!validInstance(instance)) return XR_ERROR_HANDLE_INVALID;
     if (!properties) return XR_ERROR_VALIDATION_FAILURE;
-    properties->runtimeVersion = XR_MAKE_VERSION(0, 3, 0);
-    copyText(properties->runtimeName, "QuestLink OpenXR Runtime v0.3");
+    properties->runtimeVersion = XR_MAKE_VERSION(0, 4, 0);
+    copyText(properties->runtimeName, "QuestLink OpenXR Runtime v0.4-dev");
     return XR_SUCCESS;
 }
 
@@ -790,9 +790,9 @@ static XrResult XRAPI_CALL ql_xrEnumerateViewConfigurationViews(
     if (!views || capacityInput < 2) return XR_ERROR_SIZE_INSUFFICIENT;
 
     for (uint32_t i = 0; i < 2; ++i) {
-        views[i].recommendedImageRectWidth = 1832;
+        views[i].recommendedImageRectWidth = kEyeStreamWidth;
         views[i].maxImageRectWidth = 4096;
-        views[i].recommendedImageRectHeight = 1920;
+        views[i].recommendedImageRectHeight = kEyeStreamHeight;
         views[i].maxImageRectHeight = 4096;
         views[i].recommendedSwapchainSampleCount = 1;
         views[i].maxSwapchainSampleCount = 1;
@@ -968,9 +968,7 @@ static XrResult XRAPI_CALL ql_xrGetReferenceSpaceBoundsRect(
     if (!bounds) return XR_ERROR_VALIDATION_FAILURE;
     if (referenceSpaceType != XR_REFERENCE_SPACE_TYPE_STAGE)
         return XR_SPACE_BOUNDS_UNAVAILABLE;
-    bounds->width = 2.0f;
-    bounds->height = 2.0f;
-    return XR_SUCCESS;
+    return XR_SPACE_BOUNDS_UNAVAILABLE;
 }
 
 static XrResult XRAPI_CALL ql_xrLocateSpace(
@@ -983,18 +981,12 @@ static XrResult XRAPI_CALL ql_xrLocateSpace(
     if (!s || !b) return XR_ERROR_HANDLE_INVALID;
     if (!location) return XR_ERROR_VALIDATION_FAILURE;
 
-    location->locationFlags =
-        XR_SPACE_LOCATION_ORIENTATION_VALID_BIT |
-        XR_SPACE_LOCATION_ORIENTATION_TRACKED_BIT |
-        XR_SPACE_LOCATION_POSITION_VALID_BIT |
-        XR_SPACE_LOCATION_POSITION_TRACKED_BIT;
-
-    location->pose = s->pose;
-    if (s->type == XR_REFERENCE_SPACE_TYPE_VIEW && b->type != XR_REFERENCE_SPACE_TYPE_VIEW) {
-        XrPosef head = currentHeadPose();
-        location->pose.orientation = head.orientation;
-        location->pose.position = head.position;
-    }
+    auto t=trackingSnapshot();XrPosef a,base;
+    bool valid=worldSpace(s,t,a)&&worldSpace(b,t,base);
+    location->locationFlags=valid?(XR_SPACE_LOCATION_ORIENTATION_VALID_BIT|XR_SPACE_LOCATION_POSITION_VALID_BIT|XR_SPACE_LOCATION_ORIENTATION_TRACKED_BIT|XR_SPACE_LOCATION_POSITION_TRACKED_BIT):0;
+    location->pose=valid?ql::compose(ql::inverse(base),a):ql::Identity;
+    auto* next=reinterpret_cast<XrBaseOutStructure*>(location->next);
+    while(next){if(next->type==XR_TYPE_SPACE_VELOCITY)reinterpret_cast<XrSpaceVelocity*>(next)->velocityFlags=0;next=next->next;}
     return XR_SUCCESS;
 }
 
@@ -1011,28 +1003,13 @@ static XrResult XRAPI_CALL ql_xrLocateViews(
         return XR_ERROR_VIEW_CONFIGURATION_TYPE_UNSUPPORTED;
 
     *countOutput = 2;
-    viewState->viewStateFlags =
-        XR_VIEW_STATE_ORIENTATION_VALID_BIT |
-        XR_VIEW_STATE_ORIENTATION_TRACKED_BIT |
-        XR_VIEW_STATE_POSITION_VALID_BIT |
-        XR_VIEW_STATE_POSITION_TRACKED_BIT;
-
-    if (capacityInput == 0) return XR_SUCCESS;
-    if (!views || capacityInput < 2) return XR_ERROR_SIZE_INSUFFICIENT;
-
-    XrPosef head = currentHeadPose();
-    for (uint32_t i = 0; i < 2; ++i) {
-        views[i].pose.orientation = head.orientation;
-        views[i].pose.position = {
-            head.position.x + (i == 0 ? -0.032f : 0.032f),
-            head.position.y,
-            head.position.z
-        };
-        views[i].fov.angleLeft = -0.9f;
-        views[i].fov.angleRight = 0.9f;
-        views[i].fov.angleUp = 0.9f;
-        views[i].fov.angleDown = -0.9f;
-    }
+    auto t=trackingSnapshot();XrPosef base;
+    auto* space=getSpace(locateInfo->space);if(!space)return XR_ERROR_HANDLE_INVALID;
+    bool valid=worldSpace(space,t,base)&&t.headFlags==ql::Tracked;
+    viewState->viewStateFlags=valid?(XR_VIEW_STATE_ORIENTATION_VALID_BIT|XR_VIEW_STATE_POSITION_VALID_BIT|XR_VIEW_STATE_ORIENTATION_TRACKED_BIT|XR_VIEW_STATE_POSITION_TRACKED_BIT):0;
+    if(capacityInput==0)return XR_SUCCESS;
+    if(!views||capacityInput<2)return XR_ERROR_SIZE_INSUFFICIENT;
+    for(int i=0;i<2;++i){views[i].pose=valid?ql::compose(ql::inverse(base),t.eyes[i].pose):ql::Identity;views[i].fov=t.eyes[i].fov;}
     return XR_SUCCESS;
 }
 
@@ -1047,8 +1024,7 @@ static XrResult XRAPI_CALL ql_xrEnumerateSwapchainFormats(
     constexpr int64_t supported[] = {
         DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,
         DXGI_FORMAT_R8G8B8A8_UNORM,
-        DXGI_FORMAT_B8G8R8A8_UNORM,
-        DXGI_FORMAT_R16G16B16A16_FLOAT
+        DXGI_FORMAT_B8G8R8A8_UNORM
     };
     *countOutput = static_cast<uint32_t>(std::size(supported));
     if (capacityInput == 0) return XR_SUCCESS;
@@ -1176,10 +1152,14 @@ static XrResult XRAPI_CALL ql_xrWaitFrame(
     if (!s->running) return XR_ERROR_SESSION_NOT_RUNNING;
     if (!frameState) return XR_ERROR_VALIDATION_FAILURE;
 
-    constexpr XrDuration period = 11111111;
-    frameState->predictedDisplayPeriod = period;
-    frameState->predictedDisplayTime = nowNs() + period;
-    frameState->shouldRender = XR_TRUE;
+    constexpr XrDuration period = 1000000000LL/72;
+    XrTime now=nowNs();
+    if(s->nextFrame<now-period)s->nextFrame=now;
+    if(s->nextFrame>now)std::this_thread::sleep_for(std::chrono::nanoseconds(s->nextFrame-now));
+    s->nextFrame+=period;
+    frameState->predictedDisplayPeriod=period;
+    frameState->predictedDisplayTime=s->nextFrame;
+    frameState->shouldRender=trackingSnapshot().headFlags==ql::Tracked?XR_TRUE:XR_FALSE;
     return XR_SUCCESS;
 }
 
@@ -1280,6 +1260,8 @@ static XrResult XRAPI_CALL ql_xrCreateAction(
     if (!createInfo || !action) return XR_ERROR_VALIDATION_FAILURE;
     auto* state = new ActionState();
     state->type = createInfo->actionType;
+    state->owner=actionSet;
+    if(createInfo->countSubactionPaths)state->subactions.assign(createInfo->subactionPaths,createInfo->subactionPaths+createInfo->countSubactionPaths);
     XrAction handle = reinterpret_cast<XrAction>(state);
     g_actions[handle] = state;
     *action = handle;
@@ -1294,86 +1276,110 @@ static XrResult XRAPI_CALL ql_xrDestroyAction(XrAction action) {
     return XR_SUCCESS;
 }
 
-static XrResult XRAPI_CALL ql_xrSuggestInteractionProfileBindings(
-    XrInstance instance,
-    const XrInteractionProfileSuggestedBinding*) {
-    return validInstance(instance) ? XR_SUCCESS : XR_ERROR_HANDLE_INVALID;
-}
-
-static XrResult XRAPI_CALL ql_xrAttachSessionActionSets(
-    XrSession session,
-    const XrSessionActionSetsAttachInfo*) {
-    return getSession(session) ? XR_SUCCESS : XR_ERROR_HANDLE_INVALID;
-}
-
-static XrResult XRAPI_CALL ql_xrSyncActions(
-    XrSession session,
-    const XrActionsSyncInfo*) {
-    return getSession(session) ? XR_SUCCESS : XR_ERROR_HANDLE_INVALID;
-}
-
-static XrResult XRAPI_CALL ql_xrGetActionStateBoolean(
-    XrSession session,
-    const XrActionStateGetInfo*,
-    XrActionStateBoolean* state) {
-    if (!getSession(session)) return XR_ERROR_HANDLE_INVALID;
-    if (!state) return XR_ERROR_VALIDATION_FAILURE;
-    state->currentState = XR_FALSE;
-    state->changedSinceLastSync = XR_FALSE;
-    state->lastChangeTime = 0;
-    state->isActive = XR_TRUE;
+static XrResult XRAPI_CALL ql_xrSuggestInteractionProfileBindings(XrInstance instance,const XrInteractionProfileSuggestedBinding* info) {
+    if(!validInstance(instance))return XR_ERROR_HANDLE_INVALID;
+    if(!info)return XR_ERROR_VALIDATION_FAILURE;
+    auto p=g_pathToString.find(info->interactionProfile);
+    if(p==g_pathToString.end())return XR_ERROR_PATH_INVALID;
+    if(p->second!="/interaction_profiles/oculus/touch_controller")return XR_ERROR_PATH_UNSUPPORTED;
+    for(uint32_t i=0;i<info->countSuggestedBindings;++i){auto b=info->suggestedBindings[i];if(!g_actions.count(b.action)||!g_pathToString.count(b.binding))return XR_ERROR_PATH_INVALID;}
+    for(auto& [_,a]:g_actions)a->bindings.clear();
+    for(uint32_t i=0;i<info->countSuggestedBindings;++i){auto b=info->suggestedBindings[i];g_actions[b.action]->bindings.push_back(g_pathToString[b.binding]);}
     return XR_SUCCESS;
 }
-
-static XrResult XRAPI_CALL ql_xrGetActionStateFloat(
-    XrSession session,
-    const XrActionStateGetInfo*,
-    XrActionStateFloat* state) {
-    if (!getSession(session)) return XR_ERROR_HANDLE_INVALID;
-    if (!state) return XR_ERROR_VALIDATION_FAILURE;
-    state->currentState = 0.0f;
-    state->changedSinceLastSync = XR_FALSE;
-    state->lastChangeTime = 0;
-    state->isActive = XR_TRUE;
-    return XR_SUCCESS;
+static XrResult XRAPI_CALL ql_xrAttachSessionActionSets(XrSession session,const XrSessionActionSetsAttachInfo* info) {
+    auto* s=getSession(session);if(!s)return XR_ERROR_HANDLE_INVALID;if(!info)return XR_ERROR_VALIDATION_FAILURE;
+    if(!s->attached.empty())return XR_ERROR_ACTIONSETS_ALREADY_ATTACHED;
+    for(uint32_t i=0;i<info->countActionSets;++i)if(!g_actionSets.count(info->actionSets[i]))return XR_ERROR_HANDLE_INVALID;
+    s->attached.assign(info->actionSets,info->actionSets+info->countActionSets);return XR_SUCCESS;
 }
-
-static XrResult XRAPI_CALL ql_xrGetActionStateVector2f(
-    XrSession session,
-    const XrActionStateGetInfo*,
-    XrActionStateVector2f* state) {
-    if (!getSession(session)) return XR_ERROR_HANDLE_INVALID;
-    if (!state) return XR_ERROR_VALIDATION_FAILURE;
-    state->currentState = {0.0f, 0.0f};
-    state->changedSinceLastSync = XR_FALSE;
-    state->lastChangeTime = 0;
-    state->isActive = XR_TRUE;
-    return XR_SUCCESS;
+static InputValue bindingValue(const std::string& binding,const ql::Hand& h,XrActionType type,bool focused) {
+    InputValue v;if(!focused)return v;v.active=true;
+    auto ends=[&](const char* s){size_t n=strlen(s);return binding.size()>=n&&binding.compare(binding.size()-n,n,s)==0;};
+    if(ends("/grip/pose")){v.active=h.gripFlags==ql::Tracked;}
+    else if(ends("/aim/pose")){v.active=h.aimFlags==ql::Tracked;}
+    else if(ends("/trigger/value")){v.scalar=h.trigger;v.boolean=h.trigger>0.5f;}
+    else if(ends("/squeeze/value")){v.scalar=h.squeeze;v.boolean=h.squeeze>0.5f;}
+    else if(ends("/thumbstick")){v.vector=h.stick;}
+    else if(ends("/thumbstick/x")){v.scalar=h.stick.x;}
+    else if(ends("/thumbstick/y")){v.scalar=h.stick.y;}
+    else {
+        uint32_t mask=0;
+        if(ends("/a/click")||ends("/x/click"))mask=ql::Primary;
+        else if(ends("/b/click")||ends("/y/click"))mask=ql::Secondary;
+        else if(ends("/thumbstick/click"))mask=ql::Stick;
+        else if(ends("/menu/click"))mask=ql::Menu;
+        else if(ends("/a/touch")||ends("/x/touch"))mask=ql::PrimaryTouch;
+        else if(ends("/b/touch")||ends("/y/touch"))mask=ql::SecondaryTouch;
+        else if(ends("/thumbstick/touch"))mask=ql::StickTouch;
+        else if(ends("/trigger/touch"))mask=ql::TriggerTouch;
+        else if(ends("/thumbrest/touch"))mask=ql::ThumbrestTouch;
+        else v.active=false;
+        v.boolean=(h.buttons&mask)!=0;v.scalar=v.boolean?1.f:0.f;
+    }
+    if(type==XR_ACTION_TYPE_FLOAT_INPUT)v.boolean=v.scalar>0.5f;
+    return v;
 }
-
-static XrResult XRAPI_CALL ql_xrGetActionStatePose(
-    XrSession session,
-    const XrActionStateGetInfo*,
-    XrActionStatePose* state) {
-    if (!getSession(session)) return XR_ERROR_HANDLE_INVALID;
-    if (!state) return XR_ERROR_VALIDATION_FAILURE;
-    state->isActive = XR_TRUE;
-    return XR_SUCCESS;
+static InputValue combine(InputValue a,InputValue b) {
+    a.active=a.active||b.active;a.boolean=a.boolean||b.boolean;
+    if(std::abs(b.scalar)>std::abs(a.scalar))a.scalar=b.scalar;
+    if(b.vector.x*b.vector.x+b.vector.y*b.vector.y>a.vector.x*a.vector.x+a.vector.y*a.vector.y)a.vector=b.vector;
+    return a;
 }
-
-static XrResult XRAPI_CALL ql_xrCreateActionSpace(
-    XrSession session,
-    const XrActionSpaceCreateInfo* createInfo,
-    XrSpace* space) {
-    if (!getSession(session)) return XR_ERROR_HANDLE_INVALID;
-    if (!createInfo || !space) return XR_ERROR_VALIDATION_FAILURE;
-    auto* state = new SpaceState();
-    state->type = XR_REFERENCE_SPACE_TYPE_LOCAL;
-    state->pose = createInfo->poseInActionSpace;
-    XrSpace handle = reinterpret_cast<XrSpace>(state);
-    g_spaces[handle] = state;
-    *space = handle;
-    return XR_SUCCESS;
+static XrResult XRAPI_CALL ql_xrSyncActions(XrSession session,const XrActionsSyncInfo* info) {
+    auto* s=getSession(session);if(!s)return XR_ERROR_HANDLE_INVALID;if(!info)return XR_ERROR_VALIDATION_FAILURE;
+    for(uint32_t i=0;i<info->countActiveActionSets;++i){auto a=info->activeActionSets[i];if(std::find(s->attached.begin(),s->attached.end(),a.actionSet)==s->attached.end())return XR_ERROR_ACTIONSET_NOT_ATTACHED;if(a.subactionPath&&handForPath(a.subactionPath)<0)return XR_ERROR_PATH_UNSUPPORTED;}
+    auto t=trackingSnapshot();
+    for(auto& [_,a]:g_actions){
+        InputValue next[3];
+        for(int h=0;h<2;++h){
+            bool enabled=false;
+            for(uint32_t i=0;i<info->countActiveActionSets;++i){auto x=info->activeActionSets[i];if(x.actionSet==a->owner&&(!x.subactionPath||handForPath(x.subactionPath)==h))enabled=true;}
+            if(!enabled)continue;
+            for(auto& b:a->bindings){int bh=b.find("/user/hand/left/")==0?0:b.find("/user/hand/right/")==0?1:-1;if(bh==h)next[h]=combine(next[h],bindingValue(b,t.hands[h],a->type,t.focused!=0));}
+        }
+        next[2]=combine(next[0],next[1]);
+        for(int h=0;h<3;++h){auto old=a->values[h];bool changed=false;
+            if(a->type==XR_ACTION_TYPE_BOOLEAN_INPUT)changed=old.boolean!=next[h].boolean;
+            if(a->type==XR_ACTION_TYPE_FLOAT_INPUT)changed=old.scalar!=next[h].scalar;
+            if(a->type==XR_ACTION_TYPE_VECTOR2F_INPUT)changed=old.vector.x!=next[h].vector.x||old.vector.y!=next[h].vector.y;
+            next[h].changed=next[h].active&&old.active&&changed;
+            next[h].time=next[h].active?((changed||!old.active)?nowNs():old.time):0;
+            a->values[h]=next[h];
+        }
+    }
+    return t.focused?XR_SUCCESS:XR_SESSION_NOT_FOCUSED;
+}
+static XrResult actionValue(XrSession session,const XrActionStateGetInfo* info,XrActionType type,InputValue& v) {
+    auto* s=getSession(session);if(!s)return XR_ERROR_HANDLE_INVALID;if(!info)return XR_ERROR_VALIDATION_FAILURE;
+    auto it=g_actions.find(info->action);if(it==g_actions.end())return XR_ERROR_HANDLE_INVALID;
+    auto* a=it->second;if(a->type!=type)return XR_ERROR_ACTION_TYPE_MISMATCH;
+    if(std::find(s->attached.begin(),s->attached.end(),a->owner)==s->attached.end())return XR_ERROR_ACTIONSET_NOT_ATTACHED;
+    int h=info->subactionPath?handForPath(info->subactionPath):2;
+    if(h<0||(info->subactionPath&&std::find(a->subactions.begin(),a->subactions.end(),info->subactionPath)==a->subactions.end()))return XR_ERROR_PATH_UNSUPPORTED;
+    v=a->values[h];return XR_SUCCESS;
+}
+static XrResult XRAPI_CALL ql_xrGetActionStateBoolean(XrSession s,const XrActionStateGetInfo* i,XrActionStateBoolean* o) {
+    if(!o)return XR_ERROR_VALIDATION_FAILURE;InputValue v;auto r=actionValue(s,i,XR_ACTION_TYPE_BOOLEAN_INPUT,v);if(XR_FAILED(r))return r;
+    o->isActive=v.active;o->currentState=v.boolean;o->changedSinceLastSync=v.changed;o->lastChangeTime=v.time;return XR_SUCCESS;
+}
+static XrResult XRAPI_CALL ql_xrGetActionStateFloat(XrSession s,const XrActionStateGetInfo* i,XrActionStateFloat* o) {
+    if(!o)return XR_ERROR_VALIDATION_FAILURE;InputValue v;auto r=actionValue(s,i,XR_ACTION_TYPE_FLOAT_INPUT,v);if(XR_FAILED(r))return r;
+    o->isActive=v.active;o->currentState=v.scalar;o->changedSinceLastSync=v.changed;o->lastChangeTime=v.time;return XR_SUCCESS;
+}
+static XrResult XRAPI_CALL ql_xrGetActionStateVector2f(XrSession s,const XrActionStateGetInfo* i,XrActionStateVector2f* o) {
+    if(!o)return XR_ERROR_VALIDATION_FAILURE;InputValue v;auto r=actionValue(s,i,XR_ACTION_TYPE_VECTOR2F_INPUT,v);if(XR_FAILED(r))return r;
+    o->isActive=v.active;o->currentState=v.vector;o->changedSinceLastSync=v.changed;o->lastChangeTime=v.time;return XR_SUCCESS;
+}
+static XrResult XRAPI_CALL ql_xrGetActionStatePose(XrSession s,const XrActionStateGetInfo* i,XrActionStatePose* o) {
+    if(!o)return XR_ERROR_VALIDATION_FAILURE;InputValue v;auto r=actionValue(s,i,XR_ACTION_TYPE_POSE_INPUT,v);if(XR_FAILED(r))return r;o->isActive=v.active;return XR_SUCCESS;
+}
+static XrResult XRAPI_CALL ql_xrCreateActionSpace(XrSession s,const XrActionSpaceCreateInfo* i,XrSpace* out) {
+    if(!getSession(s))return XR_ERROR_HANDLE_INVALID;if(!i||!out)return XR_ERROR_VALIDATION_FAILURE;
+    auto a=g_actions.find(i->action);if(a==g_actions.end())return XR_ERROR_HANDLE_INVALID;if(a->second->type!=XR_ACTION_TYPE_POSE_INPUT)return XR_ERROR_ACTION_TYPE_MISMATCH;
+    if(i->subactionPath&&std::find(a->second->subactions.begin(),a->second->subactions.end(),i->subactionPath)==a->second->subactions.end())return XR_ERROR_PATH_UNSUPPORTED;
+    auto* state=new SpaceState();state->type=XR_REFERENCE_SPACE_TYPE_LOCAL;state->pose=i->poseInActionSpace;state->action=i->action;state->subaction=i->subactionPath;
+    auto h=reinterpret_cast<XrSpace>(state);g_spaces[h]=state;*out=h;return XR_SUCCESS;
 }
 
 static XrResult XRAPI_CALL ql_xrApplyHapticFeedback(
@@ -1395,7 +1401,9 @@ static XrResult XRAPI_CALL ql_xrGetCurrentInteractionProfile(
     XrInteractionProfileState* interactionProfile) {
     if (!getSession(session)) return XR_ERROR_HANDLE_INVALID;
     if (!interactionProfile) return XR_ERROR_VALIDATION_FAILURE;
-    interactionProfile->interactionProfile = XR_NULL_PATH;
+    XrPath p=XR_NULL_PATH;
+    ql_xrStringToPath(g_instance,"/interaction_profiles/oculus/touch_controller",&p);
+    interactionProfile->interactionProfile = trackingSnapshot().focused?p:XR_NULL_PATH;
     return XR_SUCCESS;
 }
 
