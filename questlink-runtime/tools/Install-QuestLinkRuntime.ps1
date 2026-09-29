@@ -51,6 +51,15 @@ foreach ($key in $keys) {
     New-ItemProperty -Path $available -Name $manifest -PropertyType DWord -Value 0 -Force | Out-Null
 }
 
+try {
+    $ruleName = 'QuestLink Runtime Stream 47991'
+    Get-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue | Remove-NetFirewallRule -ErrorAction SilentlyContinue
+    New-NetFirewallRule -DisplayName $ruleName -Direction Inbound -Action Allow -Protocol TCP -LocalPort 47991 -Profile Private | Out-Null
+    Write-Host 'Firewall: allowed QuestLink stream TCP 47991 on Private networks.' -ForegroundColor Green
+} catch {
+    Write-Host ('Firewall rule warning: ' + $_.Exception.Message) -ForegroundColor Yellow
+}
+
 Write-Host ''
 Write-Host 'QuestLink is now the active OpenXR runtime.' -ForegroundColor Green
 Write-Host "Manifest: $manifest"
@@ -58,5 +67,5 @@ if (Test-Path $backup) {
     Write-Host "Previous runtime saved in: $backup"
 }
 Write-Host ''
-Write-Host 'NOTE: This is still the v0.1 prototype. The compositor/session path is not implemented yet.' -ForegroundColor Yellow
+Write-Host 'QuestLink Runtime v0.3 installed. Stream bridge TCP 47991 is enabled for the Quest test client.' -ForegroundColor Yellow
 Read-Host 'Press Enter to close'
