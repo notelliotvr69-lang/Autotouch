@@ -8,7 +8,7 @@ on:
       - ".github/workflows/questlink-runtime.yml"
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build-runtime:
@@ -44,20 +44,32 @@ jobs:
           Copy-Item "questlink-runtime/tools/Install-QuestLinkRuntime.ps1" "$stage/tools/Install-QuestLinkRuntime.ps1"
           Copy-Item "questlink-runtime/tools/Restore-PreviousRuntime.ps1" "$stage/tools/Restore-PreviousRuntime.ps1"
 
-          Compress-Archive -Path "$stage/*" -DestinationPath "dist/QuestLinkRuntime-Windows-x64.zip" -Force
+          Compress-Archive -Path "$stage/*" -DestinationPath "dist/QuestLinkRuntime-Windows-x64-v0.3.zip" -Force
 
       - name: Verify package
         shell: pwsh
         run: |
-          if (-not (Test-Path "dist/QuestLinkRuntime-Windows-x64.zip")) {
-            throw "QuestLinkRuntime-Windows-x64.zip was not created."
+          if (-not (Test-Path "dist/QuestLinkRuntime-Windows-x64-v0.3.zip")) {
+            throw "QuestLinkRuntime-Windows-x64-v0.3.zip was not created."
           }
-          Get-Item "dist/QuestLinkRuntime-Windows-x64.zip" | Format-List Name,Length,FullName
+          Get-Item "dist/QuestLinkRuntime-Windows-x64-v0.3.zip" | Format-List Name,Length,FullName
 
       - name: Upload ready-made ZIP
         uses: actions/upload-artifact@v4
         with:
-          name: QuestLinkRuntime-Windows-x64
-          path: dist/QuestLinkRuntime-Windows-x64.zip
+          name: QuestLinkRuntime-Windows-x64-v0.3
+          path: dist/QuestLinkRuntime-Windows-x64-v0.3.zip
           if-no-files-found: error
           compression-level: 0
+
+      - name: Publish runtime release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "questlink-runtime-v0.3"
+          gh release view $tag --repo "${{ github.repository }}" *> $null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $tag --repo "${{ github.repository }}" --title "QuestLink Runtime v0.3" --notes "First end-to-end QuestLink bridge test: OpenXR projection-frame preview streaming over TCP 47991 plus Quest orientation return."
+          }
+          gh release upload $tag "dist/QuestLinkRuntime-Windows-x64-v0.3.zip" --repo "${{ github.repository }}" --clobber
