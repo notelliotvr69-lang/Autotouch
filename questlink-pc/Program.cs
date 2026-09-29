@@ -23,7 +23,7 @@ internal static class Program
 public sealed class MainForm : Form
 {
     private const int Port = 47990;
-    private const string Version = "7.10";
+    private const string Version = "7.11";
 
     private readonly Label status = new();
     private readonly Label lanStatus = new();
@@ -122,7 +122,7 @@ public sealed class MainForm : Form
         native.SetBounds(28, 266, 700, 30);
         home.Controls.Add(native);
 
-        var runtimeTitle = MakeLabel("QuestLink VR Runtime / OpenVR Driver", 15, true);
+        var runtimeTitle = MakeLabel("QuestLink Runtime / OpenComposite", 15, true);
         runtimeTitle.SetBounds(28, 316, 420, 32);
         home.Controls.Add(runtimeTitle);
 
@@ -147,7 +147,7 @@ public sealed class MainForm : Form
         home.Controls.Add(launchGtagQuick);
 
         var launchHint = MakeLabel(
-            "Gorilla Tag uses SteamVR/OpenVR. QuestLink registers its virtual HMD/stream driver, starts SteamVR, then launches GTAG with -vrmode openvr.",
+            "No SteamVR. QuestLink swaps Gorilla Tag's OpenVR loader to OpenComposite, which forwards GTAG directly into the QuestLink OpenXR runtime.",
             9.5f, false);
         launchHint.SetBounds(28, 518, 790, 55);
         launchHint.AutoSize = false;
@@ -305,21 +305,15 @@ public sealed class MainForm : Form
 
     private void RefreshRuntimeStatus()
     {
-        var openVr = OpenVrDriverManager.GetStatus();
         var openXr = QuestLinkRuntimeRegistry.IsQuestLinkActive();
 
-        runtimeStatus.Text = openVr.Installed
-            ? "ACTIVE — QuestLink OpenVR driver is registered for SteamVR/GTAG."
-            : openXr
-                ? "OpenXR runtime active — GTAG still needs the QuestLink OpenVR driver."
-                : "QuestLink OpenVR driver is not registered yet.";
+        runtimeStatus.Text = openXr
+            ? "ACTIVE — QuestLink OpenXR runtime ready for OpenComposite/GTAG."
+            : "INACTIVE — install/activate the QuestLink runtime first.";
 
-        runtimeStatus.ForeColor = openVr.Installed ? Color.LightGreen : Color.Orange;
-        runtimePath.Text = openVr.Installed
-            ? "OpenVR driver: " + openVr.DriverPath
-            : "OpenXR ActiveRuntime: " + QuestLinkRuntimeRegistry.GetActiveRuntime();
-
-        launchGtagQuick.Enabled = SteamVrLibrary.GetInstallDirectory("250820") is not null;
+        runtimeStatus.ForeColor = openXr ? Color.LightGreen : Color.Orange;
+        runtimePath.Text = "ActiveRuntime: " + QuestLinkRuntimeRegistry.GetActiveRuntime();
+        launchGtagQuick.Enabled = openXr;
     }
 
     private async Task LaunchGorillaTagQuickAsync()
@@ -514,8 +508,8 @@ public sealed class MainForm : Form
                             "vr_game_filter",
                             "list_games",
                             "launch_game",
-                            "gtag_openvr",
-                            "questlink_openvr_driver",
+                            "gtag_openvr_via_opencomposite",
+                            "opencomposite_no_steamvr",
                             "questlink_runtime_detection",
                             "questlink_runtime_status",
                             "gtag_quick_launch",
@@ -531,18 +525,17 @@ public sealed class MainForm : Form
                 }
                 else if (cmd == "runtime_status")
                 {
-                    var openVr = OpenVrDriverManager.GetStatus();
                     var openXr = QuestLinkRuntimeRegistry.IsQuestLinkActive();
 
                     response = new
                     {
                         ok = true,
-                        active = openVr.Installed || openXr,
-                        openvr_driver = openVr.Installed,
-                        openvr_driver_path = openVr.DriverPath,
+                        active = openXr,
+                        opencomposite = OpenCompositeManager.IsBundled(),
                         openxr_runtime = openXr,
                         active_runtime = QuestLinkRuntimeRegistry.GetActiveRuntime(),
-                        preferred_gtag_mode = "openvr"
+                        preferred_gtag_mode = "openvr_opencomposite",
+                        steamvr_required = false
                     };
                 }
                 else if (cmd == "gtag_mods")
@@ -708,26 +701,23 @@ public static class Launcher
 
         if (game.Name.Equals("Gorilla Tag", StringComparison.OrdinalIgnoreCase))
         {
+            if (!QuestLinkRuntimeRegistry.IsQuestLinkActive())
+            {
+                return new LaunchResult(
+                    false,
+                    "QuestLink is not the active OpenXR runtime. Install/activate the QuestLink runtime first.");
+            }
+
             var exe = SteamVrLibrary.FindInstalledExe(game.AppId, "Gorilla Tag.exe");
             if (exe is null)
                 return new LaunchResult(false, "Gorilla Tag.exe was not found in the Steam library.");
 
-            var driver = OpenVrDriverManager.EnsureInstalled();
-            if (!driver.Ok)
-                return new LaunchResult(false, driver.Message);
+            var openComposite = OpenCompositeManager.InstallForGame(Path.GetDirectoryName(exe)!);
+            if (!openComposite.Ok)
+                return new LaunchResult(false, openComposite.Message);
 
             try
             {
-                StopSteamVr();
-
-                Process.Start(new ProcessStartInfo
-                {
-                    FileName = "steam://rungameid/250820",
-                    UseShellExecute = true
-                });
-
-                await Task.Delay(4500);
-
                 Process.Start(new ProcessStartInfo
                 {
                     FileName = exe,
@@ -738,11 +728,11 @@ public static class Launcher
 
                 return new LaunchResult(
                     true,
-                    "Launching Gorilla Tag through SteamVR/OpenVR with the QuestLink virtual HMD driver.");
+                    "Launching Gorilla Tag through OpenComposite -> QuestLink OpenXR. SteamVR is not used.");
             }
             catch (Exception ex)
             {
-                return new LaunchResult(false, "QuestLink OpenVR launch failed: " + ex.Message);
+                return new LaunchResult(false, "QuestLink/OpenComposite launch failed: " + ex.Message);
             }
         }
 
@@ -854,124 +844,75 @@ public static class GtagModScanner
     }
 }
 
-public record OpenVrDriverStatus(bool Installed, string DriverPath);
-public record DriverInstallResult(bool Ok, string Message);
+public record OpenCompositeInstallResult(bool Ok, string Message);
 
-public static class OpenVrDriverManager
+public static class OpenCompositeManager
 {
-    private static string? VrPathReg()
+    private static string BundledDll =>
+        Path.Combine(AppContext.BaseDirectory, "opencomposite", "openvr_api.dll");
+
+    public static bool IsBundled() => File.Exists(BundledDll);
+
+    public static OpenCompositeInstallResult InstallForGame(string gameRoot)
     {
-        var steamVr = SteamVrLibrary.GetInstallDirectory("250820");
-        if (string.IsNullOrWhiteSpace(steamVr)) return null;
-
-        var exe = Path.Combine(steamVr, "bin", "win64", "vrpathreg.exe");
-        return File.Exists(exe) ? exe : null;
-    }
-
-    public static OpenVrDriverStatus GetStatus()
-    {
-        try
-        {
-            var tool = VrPathReg();
-            if (tool is null) return new OpenVrDriverStatus(false, "SteamVR not found");
-
-            var psi = new ProcessStartInfo
-            {
-                FileName = tool,
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                CreateNoWindow = true
-            };
-            psi.ArgumentList.Add("finddriver");
-            psi.ArgumentList.Add("questlink");
-
-            using var p = Process.Start(psi);
-            if (p is null) return new OpenVrDriverStatus(false, "Not registered");
-
-            var stdout = p.StandardOutput.ReadToEnd().Trim();
-            p.WaitForExit(4000);
-
-            return p.ExitCode == 0
-                ? new OpenVrDriverStatus(true, stdout)
-                : new OpenVrDriverStatus(false, "Not registered");
-        }
-        catch
-        {
-            return new OpenVrDriverStatus(false, "Unavailable");
-        }
-    }
-
-    public static DriverInstallResult EnsureInstalled()
-    {
-        var current = GetStatus();
-        var bundled = Path.Combine(AppContext.BaseDirectory, "questlink");
-        var manifest = Path.Combine(bundled, "driver.vrdrivermanifest");
-
-        if (current.Installed &&
-            !string.IsNullOrWhiteSpace(current.DriverPath) &&
-            Directory.Exists(current.DriverPath))
-        {
-            return new DriverInstallResult(true, "QuestLink OpenVR driver already registered.");
-        }
-
-        if (!File.Exists(manifest))
-        {
-            return new DriverInstallResult(
+        if (!File.Exists(BundledDll))
+            return new OpenCompositeInstallResult(
                 false,
-                "QuestLink OpenVR driver files are missing beside QuestLinkPC.exe. Download the newest QuestLink PC ZIP.");
-        }
+                "OpenComposite is missing from the QuestLink PC package. Download QuestLink PC v7.11.");
 
-        var tool = VrPathReg();
-        if (tool is null)
-            return new DriverInstallResult(false, "SteamVR was not found. Install SteamVR first.");
-
+        string? target = null;
         try
         {
-            RunVrPathReg(tool, "removedriverswithname", "questlink", ignoreExitCode: true);
-            var add = RunVrPathReg(tool, "adddriver", bundled, ignoreExitCode: false);
-            if (!add.Ok) return add;
+            target = Directory.EnumerateFiles(
+                    gameRoot,
+                    "openvr_api.dll",
+                    SearchOption.AllDirectories)
+                .OrderBy(p => p.Length)
+                .FirstOrDefault(p =>
+                    p.Contains("Plugins", StringComparison.OrdinalIgnoreCase) ||
+                    p.Contains("x86_64", StringComparison.OrdinalIgnoreCase));
 
-            return new DriverInstallResult(true, "QuestLink OpenVR driver registered.");
+            target ??= Directory.EnumerateFiles(
+                    gameRoot,
+                    "openvr_api.dll",
+                    SearchOption.AllDirectories)
+                .OrderBy(p => p.Length)
+                .FirstOrDefault();
         }
         catch (Exception ex)
         {
-            return new DriverInstallResult(false, "Could not register QuestLink OpenVR driver: " + ex.Message);
-        }
-    }
-
-    private static DriverInstallResult RunVrPathReg(
-        string tool,
-        string command,
-        string argument,
-        bool ignoreExitCode)
-    {
-        var psi = new ProcessStartInfo
-        {
-            FileName = tool,
-            UseShellExecute = false,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            CreateNoWindow = true
-        };
-        psi.ArgumentList.Add(command);
-        psi.ArgumentList.Add(argument);
-
-        using var p = Process.Start(psi);
-        if (p is null)
-            return new DriverInstallResult(false, "Could not start vrpathreg.exe.");
-
-        var stdout = p.StandardOutput.ReadToEnd();
-        var stderr = p.StandardError.ReadToEnd();
-        p.WaitForExit(8000);
-
-        if (!ignoreExitCode && p.ExitCode != 0)
-        {
-            var details = string.IsNullOrWhiteSpace(stderr) ? stdout : stderr;
-            return new DriverInstallResult(false, "vrpathreg failed: " + details.Trim());
+            return new OpenCompositeInstallResult(false, "Could not scan Gorilla Tag for openvr_api.dll: " + ex.Message);
         }
 
-        return new DriverInstallResult(true, stdout.Trim());
+        if (string.IsNullOrWhiteSpace(target))
+        {
+            return new OpenCompositeInstallResult(
+                false,
+                "Gorilla Tag's openvr_api.dll was not found, so QuestLink could not install the no-SteamVR bridge.");
+        }
+
+        try
+        {
+            var backup = target + ".questlink-original";
+            if (!File.Exists(backup))
+                File.Copy(target, backup, overwrite: false);
+
+            File.Copy(BundledDll, target, overwrite: true);
+
+            var ini = Path.Combine(Path.GetDirectoryName(target)!, "opencomposite.ini");
+            File.WriteAllText(
+                ini,
+                "initUsingVulkan=false" + Environment.NewLine +
+                "admitUnknownProps=true" + Environment.NewLine);
+
+            return new OpenCompositeInstallResult(
+                true,
+                "OpenComposite installed for Gorilla Tag.");
+        }
+        catch (Exception ex)
+        {
+            return new OpenCompositeInstallResult(false, "Could not install OpenComposite for Gorilla Tag: " + ex.Message);
+        }
     }
 }
 
