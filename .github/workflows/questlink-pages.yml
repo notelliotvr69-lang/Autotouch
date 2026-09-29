@@ -112,11 +112,11 @@ jobs:
       - name: Assemble website downloads
         shell: bash
         run: |
-          cp questlink-android/app/build/outputs/apk/debug/app-debug.apk questlink-site/QuestLinkClient-v7.10.apk
+          cp questlink-android/app/build/outputs/apk/debug/app-debug.apk questlink-site/QuestLinkClient-v7.11.apk
 
           mkdir -p pc-package
           cp questlink-pc/bin/Release/net8.0-windows/win-x64/publish/QuestLinkPC.exe pc-package/QuestLinkPC.exe
-          (cd pc-package && zip -q ../questlink-site/QuestLinkPC-v7.9.1.zip QuestLinkPC.exe)
+          (cd pc-package && zip -q ../questlink-site/QuestLinkPC-v7.11.zip QuestLinkPC.exe)
 
           cp runtime-download/QuestLinkRuntime-Windows-x64-v0.3.zip questlink-site/QuestLinkRuntime-Windows-x64-v0.3.zip
 
