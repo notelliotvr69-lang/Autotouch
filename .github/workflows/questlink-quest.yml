@@ -40,7 +40,7 @@ jobs:
           yes | "$SDKMANAGER" --licenses >/dev/null || true
           "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0"
 
-      - name: Build QuestLink Quest v7.10
+      - name: Build QuestLink Quest v7.11
         working-directory: questlink-android
         run: gradle --no-daemon clean assembleDebug
 
@@ -48,23 +48,23 @@ jobs:
         shell: bash
         run: |
           mkdir -p dist
-          cp questlink-android/app/build/outputs/apk/debug/app-debug.apk dist/QuestLinkClient-v7.10.apk
-          test -f dist/QuestLinkClient-v7.10.apk
-          ls -lh dist/QuestLinkClient-v7.10.apk
+          cp questlink-android/app/build/outputs/apk/debug/app-debug.apk dist/QuestLinkClient-v7.11.apk
+          test -f dist/QuestLinkClient-v7.11.apk
+          ls -lh dist/QuestLinkClient-v7.11.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: QuestLinkClient-v7.10
-          path: dist/QuestLinkClient-v7.10.apk
+          name: QuestLinkClient-v7.11
+          path: dist/QuestLinkClient-v7.11.apk
           if-no-files-found: error
 
       - name: Publish Quest APK release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="questlink-quest-v7.10"
+          TAG="questlink-quest-v7.11"
           if ! gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
-            gh release create "$TAG" --repo "${{ github.repository }}" --title "QuestLink Quest v7.10" --notes "Quest test client with live runtime stereo preview over TCP 47991 and Quest orientation return."
+            gh release create "$TAG" --repo "${{ github.repository }}" --title "QuestLink Quest v7.11" --notes "Quest test client with live runtime stereo preview over TCP 47991 and Quest orientation return."
           fi
-          gh release upload "$TAG" dist/QuestLinkClient-v7.10.apk --repo "${{ github.repository }}" --clobber
+          gh release upload "$TAG" dist/QuestLinkClient-v7.11.apk --repo "${{ github.repository }}" --clobber
