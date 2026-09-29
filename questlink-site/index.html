@@ -125,7 +125,7 @@
       <div class="logo">Q</div>
       <div>
         <h1>QuestLink</h1>
-        <div class="kicker">Quest client V7.10 • PC V7.9.1 • Runtime V0.3</div>
+        <div class="kicker">Quest client V7.11 • PC V7.11 • Runtime V0.3</div>
       </div>
     </div>
 
@@ -133,7 +133,7 @@
       <p>
         QuestLink is being built toward a Virtual Desktop-style PCVR flow: open the Quest app,
         connect to your PC, browse your PCVR library in-headset, inspect Gorilla Tag BepInEx/plugins,
-        and launch games through the QuestLink PC companion and OpenXR runtime.
+        and launch Gorilla Tag without SteamVR through the QuestLink PC companion, OpenComposite, and QuestLink OpenXR runtime.
       </p>
 
       <div class="meta">
@@ -141,22 +141,24 @@
         <span class="pill">LAN pairing</span>
         <span class="pill">PCVR library</span>
         <span class="pill">GTAG mod detection</span>
+        <span class="pill">No SteamVR for GTAG</span>
+        <span class="pill">OpenComposite bridge</span>
         <span class="pill">QuestLink OpenXR runtime</span>
       </div>
 
       <div class="downloads">
-        <a class="download primary" href="https://github.com/notelliotvr69-lang/Autotouch/releases/download/questlink-quest-v7.10/QuestLinkClient-v7.10.apk">
+        <a class="download primary" href="https://github.com/notelliotvr69-lang/Autotouch/releases/download/questlink-quest-v7.11/QuestLinkClient-v7.11.apk">
           <div>
             <h2>Quest App</h2>
-            <p>Quest V7.10 headset client with PC connection, PCVR library, GTAG plugin details, live stereo bridge preview, and Quest orientation return.</p>
+            <p>Quest V7.11 headset client with PC connection, PCVR library, GTAG plugin details, live stereo bridge preview, and Quest orientation return.</p>
           </div>
           <span class="button">Download APK</span>
         </a>
 
-        <a class="download" href="https://github.com/notelliotvr69-lang/Autotouch/releases/download/questlink-pc-v7.9.1/QuestLinkPC-v7.9.1.zip">
+        <a class="download" href="https://github.com/notelliotvr69-lang/Autotouch/releases/download/questlink-pc-v7.11/QuestLinkPC-v7.11.zip">
           <div>
             <h2>Windows PC App</h2>
-            <p>Native PC companion with runtime status, PCVR scanning, Gorilla Tag mod/plugin detection, and QuestLink launch controls.</p>
+            <p>Native PC companion with bundled OpenComposite, runtime status, PCVR scanning, GTAG mod detection, and no-SteamVR QuestLink launch controls.</p>
           </div>
           <span class="button">Download PC ZIP</span>
         </a>
@@ -175,24 +177,24 @@
       <h2>Current flow</h2>
       <ol>
         <li>Install and activate the QuestLink OpenXR runtime on the PC.</li>
-        <li>Run the QuestLink PC app and note the LAN IP it shows.</li>
-        <li>Install/open the Quest APK and enter that PC IP.</li>
+        <li>Run QuestLink PC V7.11 and note the LAN IP it shows.</li>
+        <li>Install/open Quest V7.11 and enter that PC IP.</li>
         <li>The Quest launcher loads runtime status, PCVR games, and Gorilla Tag mod/plugin details.</li>
-        <li>Launch Gorilla Tag with QuestLink. Quest V7.10 automatically waits for the runtime stream on TCP 47991.</li>
+        <li>Launch Gorilla Tag with QuestLink. PC V7.11 swaps GTAG to the bundled OpenComposite bridge, then starts it with <code>-vrmode openvr</code>. SteamVR is not started.</li>
       </ol>
     </section>
 
     <section>
       <h2>Streaming status</h2>
       <div class="status">
-        The first end-to-end bridge test is now included: OpenXR projection frames are sent from the PC runtime to Quest V7.10, and Quest orientation is sent back to the runtime. This is still a low-frame-rate JPEG preview bridge, not final Virtual Desktop-quality streaming.
+        The current GTAG test path is: Gorilla Tag OpenVR → bundled OpenComposite → QuestLink OpenXR runtime → Quest V7.11. SteamVR is not part of this path. The stream is still a prototype preview bridge, not final Virtual Desktop-quality streaming.
       </div>
     </section>
 
     <section>
       <h2>Heads up</h2>
       <p class="small">
-        QuestLink V0.3 is still a prototype. Full low-latency immersive streaming, hardware H.264/H.265 encoding, controller tracking, and final compositor integration are not finished yet.
+        QuestLink is still a prototype. The no-SteamVR GTAG bridge is now packaged, but full low-latency immersive streaming, controller tracking, hardware H.264/H.265 encoding, and final compositor integration are not finished yet.
       </p>
     </section>
   </main>
