@@ -1,0 +1,73 @@
+name: QuestLink OpenVR Driver
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - 'questlink-openvr/**'
+      - '.github/workflows/questlink-openvr.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  build-openvr:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Fetch official OpenVR driver header
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path questlink-openvr/third_party | Out-Null
+          Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/ValveSoftware/openvr/master/headers/openvr_driver.h' -OutFile 'questlink-openvr/third_party/openvr_driver.h'
+
+      - name: Configure
+        shell: pwsh
+        run: cmake -S questlink-openvr -B build/questlink-openvr -A x64
+
+      - name: Build
+        shell: pwsh
+        run: cmake --build build/questlink-openvr --config Release --parallel
+
+      - name: Stage driver
+        shell: pwsh
+        run: |
+          $root = 'dist/QuestLinkOpenVR-v0.1/questlink'
+          New-Item -ItemType Directory -Force -Path "$root/bin/win64" | Out-Null
+          New-Item -ItemType Directory -Force -Path "$root/resources/settings" | Out-Null
+          New-Item -ItemType Directory -Force -Path "$root/tools" | Out-Null
+
+          Copy-Item 'build/questlink-openvr/Release/driver_questlink.dll' "$root/bin/win64/driver_questlink.dll"
+          Copy-Item 'questlink-openvr/questlink/driver.vrdrivermanifest' "$root/driver.vrdrivermanifest"
+          Copy-Item 'questlink-openvr/questlink/resources/settings/default.vrsettings' "$root/resources/settings/default.vrsettings"
+          Copy-Item 'questlink-openvr/INSTALL_QUESTLINK_OPENVR.bat' "$root/INSTALL_QUESTLINK_OPENVR.bat"
+          Copy-Item 'questlink-openvr/REMOVE_QUESTLINK_OPENVR.bat' "$root/REMOVE_QUESTLINK_OPENVR.bat"
+          Copy-Item 'questlink-openvr/README.txt' "$root/README.txt"
+          Copy-Item 'questlink-openvr/tools/Install-QuestLinkOpenVR.ps1' "$root/tools/Install-QuestLinkOpenVR.ps1"
+          Copy-Item 'questlink-openvr/tools/Remove-QuestLinkOpenVR.ps1' "$root/tools/Remove-QuestLinkOpenVR.ps1"
+
+          Compress-Archive -Path 'dist/QuestLinkOpenVR-v0.1/*' -DestinationPath 'dist/QuestLinkOpenVR-v0.1.zip' -Force
+          Get-Item 'dist/QuestLinkOpenVR-v0.1.zip' | Format-List Name,Length,FullName
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: QuestLinkOpenVR-v0.1
+          path: dist/QuestLinkOpenVR-v0.1.zip
+          if-no-files-found: error
+          compression-level: 0
+
+      - name: Publish release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = 'questlink-openvr-v0.1'
+          gh release view $tag --repo '${{ github.repository }}' *> $null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $tag --repo '${{ github.repository }}' --title 'QuestLink OpenVR Driver v0.1' --notes 'First Gorilla Tag SteamVR/OpenVR path: virtual HMD, display redirect, TCP 47991 frame bridge, and Quest orientation return.'
+          }
+          gh release upload $tag 'dist/QuestLinkOpenVR-v0.1.zip' --repo '${{ github.repository }}' --clobber
