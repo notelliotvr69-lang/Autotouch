@@ -27,6 +27,12 @@ jobs:
         with:
           name: QuestLinkRuntime-v0.4-dev
           path: dist/runtime/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: QuestLinkRuntime-tests
+          path: |
+            build/Release/protocol_test.exe
+            build/Release/runtime_test.exe
   quest:
     runs-on: ubuntu-latest
     steps:

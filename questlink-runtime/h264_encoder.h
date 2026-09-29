@@ -20,11 +20,16 @@ class H264Encoder {
     uint32_t width=0,height=0,fps=72;
     LONGLONG index=0;
     bool com=false,mf=false,async=false;
+    bool hardwareSelected=false;
     int needInput=0,haveOutput=0;
     std::vector<uint8_t> nv12;
     void setting(const GUID& key,ULONG value) {
         Ptr<ICodecAPI> api;if(FAILED(transform.As(&api)))return;
         VARIANT v;VariantInit(&v);v.vt=VT_UI4;v.ulVal=value;api->SetValue(&key,&v);
+    }
+    void booleanSetting(const GUID& key,bool value) {
+        Ptr<ICodecAPI> api;if(FAILED(transform.As(&api)))return;
+        VARIANT v;VariantInit(&v);v.vt=VT_BOOL;v.boolVal=value?VARIANT_TRUE:VARIANT_FALSE;api->SetValue(&key,&v);
     }
     bool configure() {
         Ptr<IMFAttributes> attributes;
@@ -36,7 +41,7 @@ class H264Encoder {
         output->SetUINT32(MF_MT_AVG_BITRATE,12000000);output->SetUINT32(MF_MT_INTERLACE_MODE,MFVideoInterlace_Progressive);
         output->SetUINT32(MF_MT_MPEG2_PROFILE,66);
         MFSetAttributeSize(output.Get(),MF_MT_FRAME_SIZE,width,height);MFSetAttributeRatio(output.Get(),MF_MT_FRAME_RATE,fps,1);MFSetAttributeRatio(output.Get(),MF_MT_PIXEL_ASPECT_RATIO,1,1);
-        setting(CODECAPI_AVLowLatencyMode,1);setting(CODECAPI_AVEncMPVDefaultBPictureCount,0);setting(CODECAPI_AVEncMPVGOPSize,fps);
+        booleanSetting(CODECAPI_AVLowLatencyMode,true);setting(CODECAPI_AVEncMPVDefaultBPictureCount,0);setting(CODECAPI_AVEncMPVGOPSize,fps);
         if(FAILED(transform->SetOutputType(0,output.Get(),0)))return false;
         input->SetGUID(MF_MT_MAJOR_TYPE,MFMediaType_Video);input->SetGUID(MF_MT_SUBTYPE,MFVideoFormat_NV12);
         input->SetUINT32(MF_MT_INTERLACE_MODE,MFVideoInterlace_Progressive);
@@ -56,12 +61,14 @@ class H264Encoder {
     static uint8_t clamp(int v){return uint8_t(v<0?0:v>255?255:v);}
 public:
     ~H264Encoder(){events.Reset();transform.Reset();if(mf)MFShutdown();if(com)CoUninitialize();}
-    bool open(uint32_t w,uint32_t h,uint32_t rate,uint32_t) {
+    bool hardware() const { return hardwareSelected; }
+    bool open(uint32_t w,uint32_t h,uint32_t rate,uint32_t,bool allowHardware=true) {
         width=w;height=h;fps=rate;
         com=SUCCEEDED(CoInitializeEx(nullptr,COINIT_MULTITHREADED));
         mf=SUCCEEDED(MFStartup(MF_VERSION));if(!mf)return false;
         MFT_REGISTER_TYPE_INFO in{MFMediaType_Video,MFVideoFormat_NV12},out{MFMediaType_Video,MFVideoFormat_H264};
         for(UINT32 flags:{UINT32(MFT_ENUM_FLAG_HARDWARE|MFT_ENUM_FLAG_SORTANDFILTER),UINT32(MFT_ENUM_FLAG_SYNCMFT|MFT_ENUM_FLAG_SORTANDFILTER)}) {
+            if(!allowHardware&&(flags&MFT_ENUM_FLAG_HARDWARE))continue;
             IMFActivate** list=nullptr;UINT32 count=0;
             if(FAILED(MFTEnumEx(MFT_CATEGORY_VIDEO_ENCODER,flags,&in,&out,&list,&count)))continue;
             bool ok=false;
@@ -69,7 +76,7 @@ public:
                 if(SUCCEEDED(list[i]->ActivateObject(IID_PPV_ARGS(&transform))))ok=configure();
             }
             for(UINT32 i=0;i<count;++i)list[i]->Release();CoTaskMemFree(list);
-            if(ok){nv12.resize(size_t(w)*h*3/2);return true;}
+            if(ok){hardwareSelected=(flags&MFT_ENUM_FLAG_HARDWARE)!=0;nv12.resize(size_t(w)*h*3/2);return true;}
         }
         transform.Reset();return false;
     }

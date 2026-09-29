@@ -58,6 +58,8 @@ struct SwapchainState {
     int32_t acquired = -1;
     int32_t lastReleased = -1;
     bool waited = false;
+    ID3D11Texture2D* staging = nullptr;
+    uint32_t stagingWidth=0,stagingHeight=0;
 };
 
 struct ActionSetState {};
@@ -140,8 +142,9 @@ bool worldSpace(SpaceState* s,const ql::Tracking& t,XrPosef& pose) {
 std::atomic<bool> g_bridgeRunning{false};
 std::atomic<bool> g_bridgeStarted{false};
 std::thread g_bridgeThread;
-SOCKET g_bridgeListen = INVALID_SOCKET;
+std::atomic<SOCKET> g_bridgeListen{INVALID_SOCKET};
 SOCKET g_bridgeClient = INVALID_SOCKET;
+std::mutex g_socketMutex;
 
 constexpr uint16_t kStreamPort = 47991;
 constexpr uint32_t kEyeStreamWidth = 640;
@@ -382,9 +385,14 @@ bool copyProjectionEye(
     stageDesc.Usage = D3D11_USAGE_STAGING;
     stageDesc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
 
-    ID3D11Texture2D* staging = nullptr;
-    HRESULT hr = session->device->CreateTexture2D(&stageDesc, nullptr, &staging);
-    if (FAILED(hr) || !staging) return false;
+    if(swapchain->staging&&(swapchain->stagingWidth!=copyW||swapchain->stagingHeight!=copyH)){
+        swapchain->staging->Release();swapchain->staging=nullptr;
+    }
+    if(!swapchain->staging){
+        if(FAILED(session->device->CreateTexture2D(&stageDesc,nullptr,&swapchain->staging)))return false;
+        swapchain->stagingWidth=copyW;swapchain->stagingHeight=copyH;
+    }
+    ID3D11Texture2D* staging=swapchain->staging;
 
     D3D11_BOX box{};
     box.left = static_cast<UINT>(offsetX);
@@ -399,9 +407,8 @@ bool copyProjectionEye(
     session->context->CopySubresourceRegion(staging, 0, 0, 0, 0, source, srcSubresource, &box);
 
     D3D11_MAPPED_SUBRESOURCE mapped{};
-    hr = session->context->Map(staging, 0, D3D11_MAP_READ, 0, &mapped);
+    HRESULT hr = session->context->Map(staging, 0, D3D11_MAP_READ, 0, &mapped);
     if (FAILED(hr)) {
-        staging->Release();
         return false;
     }
 
@@ -433,7 +440,6 @@ bool copyProjectionEye(
     }
 
     session->context->Unmap(staging, 0);
-    staging->Release();
     return true;
 }
 
@@ -535,6 +541,7 @@ void bridgeServerLoop() {
     }
 
     logLine("QuestLink bridge: listening on TCP 47991");
+    bool allowHardware=true,allowH264=true;
 
     while (g_bridgeRunning) {
         SOCKET client = accept(listenSocket, nullptr, nullptr);
@@ -543,7 +550,7 @@ void bridgeServerLoop() {
             continue;
         }
 
-        g_bridgeClient = client;
+        {std::lock_guard<std::mutex> lock(g_socketMutex);g_bridgeClient=client;}
         logLine("QuestLink bridge: Quest stream client connected");
 
         int noDelay = 1;
@@ -553,15 +560,16 @@ void bridgeServerLoop() {
         setsockopt(client,SOL_SOCKET,SO_RCVTIMEO,reinterpret_cast<char*>(&timeout),sizeof(timeout));
         setsockopt(client,SOL_SOCKET,SO_SNDTIMEO,reinterpret_cast<char*>(&timeout),sizeof(timeout));
         uint32_t hello=0;
-        if(!recvAll(client,&hello,4)||ntohl(hello)!=ql::HelloMagic){closesocket(client);g_bridgeClient=INVALID_SOCKET;continue;}
+        if(!recvAll(client,&hello,4)||ntohl(hello)!=ql::HelloMagic){std::lock_guard<std::mutex> lock(g_socketMutex);closesocket(client);g_bridgeClient=INVALID_SOCKET;continue;}
         {std::lock_guard<std::mutex> lock(g_trackingMutex);g_tracking={};g_trackingTime={};}
         g_clientConnected=true;
         ql::H264Encoder encoder;
-        bool h264=encoder.open(kEyeStreamWidth*2,kEyeStreamHeight,72,12000000);
-        logLine(h264?"Video encoder: H264":"Video encoder unavailable: JPEG fallback");
+        bool h264=allowH264&&encoder.open(kEyeStreamWidth*2,kEyeStreamHeight,72,12000000,allowHardware);
+        logLine(h264?(encoder.hardware()?"Video encoder: hardware H264":"Video encoder: software H264"):"Video encoder unavailable: JPEG fallback");
         std::atomic<bool> alive{true};
         std::thread receiver(receiveHeadPoseLoop, client, std::ref(alive));
-        uint64_t lastVersion = 0;
+        uint64_t lastVersion;
+        {std::lock_guard<std::mutex> lock(g_streamMutex);lastVersion=g_latestFrameVersion;}
 
         while (g_bridgeRunning && alive.load()) {
             StreamFrame frame;
@@ -580,7 +588,11 @@ void bridgeServerLoop() {
 
             std::vector<uint8_t> encoded;
             bool encodedOk=h264?encoder.encode(frame.bgra,encoded):encodeJpeg(frame,encoded);
-            if(!encodedOk){logLine("Video encoding failed; reconnect required");alive=false;break;}
+            if(!encodedOk){
+                logLine("Video encoding failed; reconnecting with fallback encoder");
+                if(h264&&encoder.hardware())allowHardware=false;else if(h264)allowH264=false;
+                alive=false;break;
+            }
             ql::VideoHeader header;
             header.width=frame.width;header.height=frame.height;header.id=frame.id;
             header.codec=h264?2:1;header.bytes=static_cast<uint32_t>(encoded.size());header.eyes=frame.eyes;
@@ -590,15 +602,14 @@ void bridgeServerLoop() {
         g_clientConnected=false;
 
         shutdown(client, SD_BOTH);
-        closesocket(client);
-        g_bridgeClient = INVALID_SOCKET;
+        {std::lock_guard<std::mutex> lock(g_socketMutex);closesocket(client);g_bridgeClient=INVALID_SOCKET;}
 
         if (receiver.joinable()) receiver.join();
         logLine("QuestLink bridge: Quest stream client disconnected");
     }
 
-    if (g_bridgeListen != INVALID_SOCKET) closesocket(listenSocket);
-    g_bridgeListen = INVALID_SOCKET;
+    SOCKET owned=g_bridgeListen.exchange(INVALID_SOCKET);
+    if(owned!=INVALID_SOCKET)closesocket(owned);
     WSACleanup();
 }
 
@@ -616,15 +627,9 @@ void stopBridgeServer() {
     g_bridgeRunning = false;
     g_streamCv.notify_all();
 
-    if (g_bridgeClient != INVALID_SOCKET) {
-        shutdown(g_bridgeClient, SD_BOTH);
-
-    }
-
-    if (g_bridgeListen != INVALID_SOCKET) {
-        closesocket(g_bridgeListen);
-        g_bridgeListen = INVALID_SOCKET;
-    }
+    {std::lock_guard<std::mutex> lock(g_socketMutex);if(g_bridgeClient!=INVALID_SOCKET)shutdown(g_bridgeClient,SD_BOTH);}
+    SOCKET owned=g_bridgeListen.exchange(INVALID_SOCKET);
+    if(owned!=INVALID_SOCKET)closesocket(owned);
 
     if (g_bridgeThread.joinable()) g_bridgeThread.join();
     g_bridgeStarted = false;
@@ -1079,6 +1084,7 @@ static XrResult XRAPI_CALL ql_xrCreateSwapchain(
 static XrResult XRAPI_CALL ql_xrDestroySwapchain(XrSwapchain swapchain) {
     auto it = g_swapchains.find(swapchain);
     if (it == g_swapchains.end()) return XR_ERROR_HANDLE_INVALID;
+    if(it->second->staging)it->second->staging->Release();
     for (auto* texture : it->second->images) if (texture) texture->Release();
     delete it->second;
     g_swapchains.erase(it);
@@ -1281,7 +1287,13 @@ static XrResult XRAPI_CALL ql_xrSuggestInteractionProfileBindings(XrInstance ins
     if(!info)return XR_ERROR_VALIDATION_FAILURE;
     auto p=g_pathToString.find(info->interactionProfile);
     if(p==g_pathToString.end())return XR_ERROR_PATH_INVALID;
-    if(p->second!="/interaction_profiles/oculus/touch_controller")return XR_ERROR_PATH_UNSUPPORTED;
+    // OpenComposite suggests every core profile before the attached device is known.
+    // Accept core profile suggestions, but select Touch for this Quest-only runtime.
+    if(p->second!="/interaction_profiles/oculus/touch_controller") {
+        static const char* core[]={"/interaction_profiles/khr/simple_controller","/interaction_profiles/htc/vive_controller","/interaction_profiles/valve/index_controller","/interaction_profiles/microsoft/motion_controller"};
+        for(auto* name:core)if(p->second==name)return XR_SUCCESS;
+        return XR_ERROR_PATH_UNSUPPORTED;
+    }
     for(uint32_t i=0;i<info->countSuggestedBindings;++i){auto b=info->suggestedBindings[i];if(!g_actions.count(b.action)||!g_pathToString.count(b.binding))return XR_ERROR_PATH_INVALID;}
     for(auto& [_,a]:g_actions)a->bindings.clear();
     for(uint32_t i=0;i<info->countSuggestedBindings;++i){auto b=info->suggestedBindings[i];g_actions[b.action]->bindings.push_back(g_pathToString[b.binding]);}
@@ -1403,10 +1415,36 @@ static XrResult XRAPI_CALL ql_xrGetCurrentInteractionProfile(
     if (!interactionProfile) return XR_ERROR_VALIDATION_FAILURE;
     XrPath p=XR_NULL_PATH;
     ql_xrStringToPath(g_instance,"/interaction_profiles/oculus/touch_controller",&p);
-    interactionProfile->interactionProfile = trackingSnapshot().focused?p:XR_NULL_PATH;
+    interactionProfile->interactionProfile = p;
     return XR_SUCCESS;
 }
 
+static XrResult XRAPI_CALL ql_xrEnumerateBoundSourcesForAction(
+    XrSession session,const XrBoundSourcesForActionEnumerateInfo* info,
+    uint32_t capacity,uint32_t* count,XrPath* sources) {
+    auto* s=getSession(session);if(!s)return XR_ERROR_HANDLE_INVALID;
+    if(!info||!count)return XR_ERROR_VALIDATION_FAILURE;
+    auto a=g_actions.find(info->action);if(a==g_actions.end())return XR_ERROR_HANDLE_INVALID;
+    if(std::find(s->attached.begin(),s->attached.end(),a->second->owner)==s->attached.end())return XR_ERROR_ACTIONSET_NOT_ATTACHED;
+    std::vector<XrPath> paths;
+    for(auto& binding:a->second->bindings){XrPath p;ql_xrStringToPath(g_instance,binding.c_str(),&p);if(std::find(paths.begin(),paths.end(),p)==paths.end())paths.push_back(p);}
+    *count=static_cast<uint32_t>(paths.size());if(!capacity)return XR_SUCCESS;
+    if(capacity<*count)return XR_ERROR_SIZE_INSUFFICIENT;if(*count&&!sources)return XR_ERROR_VALIDATION_FAILURE;
+    std::copy(paths.begin(),paths.end(),sources);return XR_SUCCESS;
+}
+static XrResult XRAPI_CALL ql_xrGetInputSourceLocalizedName(
+    XrSession session,const XrInputSourceLocalizedNameGetInfo* info,
+    uint32_t capacity,uint32_t* count,char* buffer) {
+    if(!getSession(session))return XR_ERROR_HANDLE_INVALID;
+    if(!info||!count||!info->whichComponents)return XR_ERROR_VALIDATION_FAILURE;
+    auto source=g_pathToString.find(info->sourcePath);if(source==g_pathToString.end())return XR_ERROR_PATH_INVALID;
+    std::string name;
+    if(info->whichComponents&XR_INPUT_SOURCE_LOCALIZED_NAME_USER_PATH_BIT)name=source->second.find("/left/")!=std::string::npos?"Left hand":"Right hand";
+    if(info->whichComponents&XR_INPUT_SOURCE_LOCALIZED_NAME_INTERACTION_PROFILE_BIT)name+=" Touch controller";
+    if(info->whichComponents&XR_INPUT_SOURCE_LOCALIZED_NAME_COMPONENT_BIT){auto component=source->second.find("/input/");name+=" "+(component==std::string::npos?source->second:source->second.substr(component+7));}
+    *count=static_cast<uint32_t>(name.size()+1);if(!capacity)return XR_SUCCESS;if(capacity<*count)return XR_ERROR_SIZE_INSUFFICIENT;if(!buffer)return XR_ERROR_VALIDATION_FAILURE;
+    memcpy(buffer,name.c_str(),*count);return XR_SUCCESS;
+}
 static XrResult XRAPI_CALL ql_xrResultToString(
     XrInstance instance,
     XrResult value,
@@ -1497,6 +1535,8 @@ static XrResult XRAPI_CALL ql_xrGetInstanceProcAddr(
         QL_PROC(xrApplyHapticFeedback);
         QL_PROC(xrStopHapticFeedback);
         QL_PROC(xrGetCurrentInteractionProfile);
+        QL_PROC(xrEnumerateBoundSourcesForAction);
+        QL_PROC(xrGetInputSourceLocalizedName);
         QL_PROC(xrResultToString);
         QL_PROC(xrStructureTypeToString);
     }
@@ -1520,7 +1560,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrNegotiateLoaderRuntimeInterface(
     runtimeRequest->runtimeApiVersion = XR_CURRENT_API_VERSION;
     runtimeRequest->getInstanceProcAddr = ql_xrGetInstanceProcAddr;
 
-    logLine("xrNegotiateLoaderRuntimeInterface: QuestLink v0.3");
+    logLine("xrNegotiateLoaderRuntimeInterface: QuestLink v0.4-dev");
     return XR_SUCCESS;
 }
 
