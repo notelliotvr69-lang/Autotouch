@@ -23,9 +23,10 @@ internal static class Program
 public sealed class MainForm : Form
 {
     private const int Port = 47990;
-    private const string Version = "7.9";
+    private const string Version = "7.9.1";
 
     private readonly Label status = new();
+    private readonly Label lanStatus = new();
     private readonly Label ipLabel = new();
     private readonly ListBox games = new();
     private readonly TrackBar worldScale = new();
@@ -45,6 +46,8 @@ public sealed class MainForm : Form
     private readonly Button refreshGtagMods = new();
 
     private readonly CancellationTokenSource cts = new();
+    private TcpListener? lanListener;
+    private Task? lanServerTask;
     private List<VrGame> currentGames = new();
 
     public MainForm()
@@ -61,11 +64,15 @@ public sealed class MainForm : Form
         BuildUi();
         Shown += async (_, _) =>
         {
-            _ = Task.Run(() => RunServerAsync(cts.Token));
+            StartLanServer();
             RefreshRuntimeStatus();
             await ReloadGamesAsync();
         };
-        FormClosing += (_, _) => cts.Cancel();
+        FormClosing += (_, _) =>
+        {
+            cts.Cancel();
+            try { lanListener?.Stop(); } catch { }
+        };
     }
 
     private void BuildUi()
@@ -92,44 +99,49 @@ public sealed class MainForm : Form
         ipLabel.Font = new Font("Segoe UI", 14f, FontStyle.Bold);
         home.Controls.Add(ipLabel);
 
-        status.Text = "QuestLink server starting...";
-        status.SetBounds(28, 126, 700, 30);
+        lanStatus.Text = "LAN server: starting...";
+        lanStatus.SetBounds(28, 122, 760, 28);
+        lanStatus.ForeColor = Color.Gold;
+        home.Controls.Add(lanStatus);
+
+        status.Text = "Starting...";
+        status.SetBounds(28, 152, 760, 28);
         status.ForeColor = Color.LightGray;
         home.Controls.Add(status);
 
         var note = MakeLabel(
             "Enter the PC IP shown above into the Quest app. Pairing is LAN-only and does not install anything over IP.",
             11, false);
-        note.SetBounds(28, 174, 790, 70);
+        note.SetBounds(28, 198, 790, 62);
         note.AutoSize = false;
         home.Controls.Add(note);
 
         var native = MakeLabel(
             "Native Windows app — no Python required.",
             11, true);
-        native.SetBounds(28, 250, 700, 30);
+        native.SetBounds(28, 266, 700, 30);
         home.Controls.Add(native);
 
         var runtimeTitle = MakeLabel("QuestLink OpenXR Runtime", 15, true);
-        runtimeTitle.SetBounds(28, 310, 420, 32);
+        runtimeTitle.SetBounds(28, 316, 420, 32);
         home.Controls.Add(runtimeTitle);
 
-        runtimeStatus.SetBounds(28, 352, 760, 28);
+        runtimeStatus.SetBounds(28, 354, 760, 28);
         runtimeStatus.Font = new Font("Segoe UI", 11f, FontStyle.Bold);
         home.Controls.Add(runtimeStatus);
 
-        runtimePath.SetBounds(28, 385, 790, 52);
+        runtimePath.SetBounds(28, 388, 790, 52);
         runtimePath.AutoSize = false;
         runtimePath.ForeColor = Color.LightGray;
         home.Controls.Add(runtimePath);
 
         refreshRuntime.Text = "Refresh Runtime Status";
-        refreshRuntime.SetBounds(28, 448, 210, 42);
+        refreshRuntime.SetBounds(28, 452, 210, 42);
         refreshRuntime.Click += (_, _) => RefreshRuntimeStatus();
         home.Controls.Add(refreshRuntime);
 
         launchGtagQuick.Text = "Launch Gorilla Tag with QuestLink";
-        launchGtagQuick.SetBounds(260, 448, 360, 52);
+        launchGtagQuick.SetBounds(260, 452, 360, 52);
         launchGtagQuick.Font = new Font("Segoe UI", 11f, FontStyle.Bold);
         launchGtagQuick.Click += async (_, _) => await LaunchGorillaTagQuickAsync();
         home.Controls.Add(launchGtagQuick);
@@ -137,7 +149,7 @@ public sealed class MainForm : Form
         var launchHint = MakeLabel(
             "This stops SteamVR, checks that QuestLink is the active OpenXR runtime, then starts Gorilla Tag in OpenXR mode.",
             9.5f, false);
-        launchHint.SetBounds(28, 515, 790, 55);
+        launchHint.SetBounds(28, 518, 790, 55);
         launchHint.AutoSize = false;
         home.Controls.Add(launchHint);
 
@@ -410,25 +422,62 @@ public sealed class MainForm : Form
         catch { }
     }
 
-    private async Task RunServerAsync(CancellationToken token)
+    private void StartLanServer()
     {
-        var listener = new TcpListener(IPAddress.Any, Port);
-        listener.Start();
+        try
+        {
+            try { lanListener?.Stop(); } catch { }
 
-        BeginInvoke(() => status.Text = "QuestLink server ready.");
+            lanListener = new TcpListener(IPAddress.Any, Port);
+            lanListener.Server.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+            lanListener.Start();
 
+            lanStatus.Text = $"LAN server: LISTENING on 0.0.0.0:{Port}";
+            lanStatus.ForeColor = Color.LightGreen;
+
+            lanServerTask = Task.Run(() => AcceptLoopAsync(lanListener, cts.Token));
+        }
+        catch (Exception ex)
+        {
+            lanStatus.Text = $"LAN server FAILED: {ex.Message}";
+            lanStatus.ForeColor = Color.OrangeRed;
+            status.Text = "Quest cannot connect until the LAN server is listening.";
+        }
+    }
+
+    private async Task AcceptLoopAsync(TcpListener listener, CancellationToken token)
+    {
         try
         {
             while (!token.IsCancellationRequested)
             {
-                var client = await listener.AcceptTcpClientAsync(token);
+                TcpClient client;
+                try
+                {
+                    client = await listener.AcceptTcpClientAsync(token);
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+                catch (ObjectDisposedException)
+                {
+                    break;
+                }
+
                 _ = Task.Run(() => HandleClientAsync(client), token);
             }
         }
-        catch (OperationCanceledException) { }
-        finally
+        catch (Exception ex)
         {
-            listener.Stop();
+            if (!token.IsCancellationRequested && IsHandleCreated)
+            {
+                BeginInvoke(() =>
+                {
+                    lanStatus.Text = $"LAN server stopped: {ex.Message}";
+                    lanStatus.ForeColor = Color.OrangeRed;
+                });
+            }
         }
     }
 
@@ -458,6 +507,8 @@ public sealed class MainForm : Form
                         app = "QuestLink PC",
                         version = Version,
                         pc = Environment.MachineName,
+                        lan_port = Port,
+                        server = "listening",
                         features = new[]
                         {
                             "vr_game_filter",
