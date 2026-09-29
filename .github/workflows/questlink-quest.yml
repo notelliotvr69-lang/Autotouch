@@ -1,0 +1,70 @@
+name: QuestLink Quest APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - "questlink-android/**"
+      - ".github/workflows/questlink-quest.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  build-quest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+
+      - name: Install Android SDK packages
+        shell: bash
+        run: |
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$SDKMANAGER" ]; then
+            SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | head -n 1)"
+          fi
+          test -x "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Build QuestLink Quest v7.10
+        working-directory: questlink-android
+        run: gradle --no-daemon clean assembleDebug
+
+      - name: Stage APK
+        shell: bash
+        run: |
+          mkdir -p dist
+          cp questlink-android/app/build/outputs/apk/debug/app-debug.apk dist/QuestLinkClient-v7.10.apk
+          test -f dist/QuestLinkClient-v7.10.apk
+          ls -lh dist/QuestLinkClient-v7.10.apk
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: QuestLinkClient-v7.10
+          path: dist/QuestLinkClient-v7.10.apk
+          if-no-files-found: error
+
+      - name: Publish Quest APK release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="questlink-quest-v7.10"
+          if ! gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            gh release create "$TAG" --repo "${{ github.repository }}" --title "QuestLink Quest v7.10" --notes "Quest test client with live runtime stereo preview over TCP 47991 and Quest orientation return."
+          fi
+          gh release upload "$TAG" dist/QuestLinkClient-v7.10.apk --repo "${{ github.repository }}" --clobber
