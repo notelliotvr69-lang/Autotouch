@@ -116,14 +116,14 @@ jobs:
 
           mkdir -p pc-package
           cp questlink-pc/bin/Release/net8.0-windows/win-x64/publish/QuestLinkPC.exe pc-package/QuestLinkPC.exe
-          (cd pc-package && zip -q ../questlink-site/QuestLinkPC-v7.9.zip QuestLinkPC.exe)
+          (cd pc-package && zip -q ../questlink-site/QuestLinkPC-v7.9.1.1.zip QuestLinkPC.exe)
 
           cp runtime-download/QuestLinkRuntime-Windows-x64-v0.2.zip questlink-site/QuestLinkRuntime-Windows-x64-v0.2.zip
 
           test -f questlink-site/QuestLinkClient-v7.9.apk
-          test -f questlink-site/QuestLinkPC-v7.9.zip
+          test -f questlink-site/QuestLinkPC-v7.9.1.1.zip
           test -f questlink-site/QuestLinkRuntime-Windows-x64-v0.2.zip
-          ls -lh questlink-site/QuestLinkClient-v7.9.apk questlink-site/QuestLinkPC-v7.9.zip questlink-site/QuestLinkRuntime-Windows-x64-v0.2.zip
+          ls -lh questlink-site/QuestLinkClient-v7.9.apk questlink-site/QuestLinkPC-v7.9.1.1.zip questlink-site/QuestLinkRuntime-Windows-x64-v0.2.zip
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
