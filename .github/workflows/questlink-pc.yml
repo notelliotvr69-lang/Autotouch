@@ -5,6 +5,7 @@ on:
   push:
     paths:
       - "questlink-pc/**"
+      - "questlink-openvr/**"
       - ".github/workflows/questlink-pc.yml"
 
 permissions:
@@ -28,20 +29,48 @@ jobs:
         run: |
           dotnet publish questlink-pc/QuestLink.PC.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true
 
+      - name: Fetch official OpenVR driver header
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path questlink-openvr/third_party | Out-Null
+          Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/ValveSoftware/openvr/master/headers/openvr_driver.h' -OutFile 'questlink-openvr/third_party/openvr_driver.h'
+
+      - name: Build QuestLink OpenVR driver
+        shell: pwsh
+        run: |
+          cmake -S questlink-openvr -B build/questlink-openvr -A x64
+          cmake --build build/questlink-openvr --config Release --parallel
+
       - name: Stage PC build
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path dist | Out-Null
-          Copy-Item "questlink-pc/bin/Release/net8.0-windows/win-x64/publish/QuestLinkPC.exe" "dist/QuestLinkPC.exe"
-          Compress-Archive -Path "dist/QuestLinkPC.exe" -DestinationPath "dist/QuestLinkPC-v7.9.1.zip" -Force
+          $stage = "dist/QuestLinkPC-v7.10"
+          $driver = "$stage/questlink"
+
+          New-Item -ItemType Directory -Force -Path "$driver/bin/win64" | Out-Null
+          New-Item -ItemType Directory -Force -Path "$driver/resources/settings" | Out-Null
+          New-Item -ItemType Directory -Force -Path "$driver/tools" | Out-Null
+
+          Copy-Item "questlink-pc/bin/Release/net8.0-windows/win-x64/publish/QuestLinkPC.exe" "$stage/QuestLinkPC.exe"
+
+          Copy-Item "build/questlink-openvr/Release/driver_questlink.dll" "$driver/bin/win64/driver_questlink.dll"
+          Copy-Item "questlink-openvr/questlink/driver.vrdrivermanifest" "$driver/driver.vrdrivermanifest"
+          Copy-Item "questlink-openvr/questlink/resources/settings/default.vrsettings" "$driver/resources/settings/default.vrsettings"
+          Copy-Item "questlink-openvr/INSTALL_QUESTLINK_OPENVR.bat" "$driver/INSTALL_QUESTLINK_OPENVR.bat"
+          Copy-Item "questlink-openvr/REMOVE_QUESTLINK_OPENVR.bat" "$driver/REMOVE_QUESTLINK_OPENVR.bat"
+          Copy-Item "questlink-openvr/README.txt" "$driver/README.txt"
+          Copy-Item "questlink-openvr/tools/Install-QuestLinkOpenVR.ps1" "$driver/tools/Install-QuestLinkOpenVR.ps1"
+          Copy-Item "questlink-openvr/tools/Remove-QuestLinkOpenVR.ps1" "$driver/tools/Remove-QuestLinkOpenVR.ps1"
+
+          Compress-Archive -Path "$stage/*" -DestinationPath "dist/QuestLinkPC-v7.10.zip" -Force
 
       - name: Upload PC build
         uses: actions/upload-artifact@v4
         with:
-          name: QuestLinkPC-v7.9.1
+          name: QuestLinkPC-v7.10
           path: |
             dist/QuestLinkPC.exe
-            dist/QuestLinkPC-v7.9.1.zip
+            dist/QuestLinkPC-v7.10.zip
           if-no-files-found: error
           compression-level: 0
 
@@ -50,9 +79,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $tag = "questlink-pc-v7.9.1"
+          $tag = "questlink-pc-v7.10"
           gh release view $tag --repo "${{ github.repository }}" *> $null
           if ($LASTEXITCODE -ne 0) {
-            gh release create $tag --repo "${{ github.repository }}" --title "QuestLink PC v7.9.1" --notes "QuestLink PC v7.9.1 LAN server fix and GTAG mod/plugin detection."
+            gh release create $tag --repo "${{ github.repository }}" --title "QuestLink PC v7.10" --notes "QuestLink PC v7.10 bundles the QuestLink OpenVR virtual HMD/stream driver and launches Gorilla Tag through SteamVR/OpenVR."
           }
-          gh release upload $tag "dist/QuestLinkPC-v7.9.1.zip" --repo "${{ github.repository }}" --clobber
+          gh release upload $tag "dist/QuestLinkPC-v7.10.zip" --repo "${{ github.repository }}" --clobber
