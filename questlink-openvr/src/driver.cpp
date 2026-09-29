@@ -488,7 +488,7 @@ class QuestDisplayRedirect final :
     public vr::IVRVirtualDisplay {
 
 public:
-    ~QuestDisplayRedirect() override {
+    ~QuestDisplayRedirect() {
         ReleaseD3D();
     }
 
