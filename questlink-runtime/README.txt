@@ -1,30 +1,25 @@
-QuestLink OpenXR Runtime v0.2 - Windows x64 prototype
-
-NO VISUAL STUDIO OR CMAKE IS REQUIRED TO USE THE DOWNLOADED BUILD.
+QuestLink OpenXR Runtime v0.3 - Windows x64 prototype
 
 INSTALL
-1. Extract QuestLinkRuntime-Windows-x64.zip.
-2. Double-click INSTALL_QUESTLINK_RUNTIME.bat.
-3. Accept the Windows administrator prompt.
-4. Use RUNTIME_STATUS.bat if you want to verify the active OpenXR runtime.
+1. Extract QuestLinkRuntime-Windows-x64-v0.3.zip.
+2. Run INSTALL_QUESTLINK_RUNTIME.bat as prompted.
+3. The installer activates QuestLink as the OpenXR runtime and allows TCP 47991 on Private networks.
+4. Keep QuestLink PC v7.9.1 open on TCP 47990 for launcher/control commands.
 
-RESTORE YOUR OLD RUNTIME
-Double-click RESTORE_PREVIOUS_RUNTIME.bat.
+V0.3 TEST BRIDGE
+- Captures submitted OpenXR projection-layer eye images from D3D11 swapchains.
+- Downscales the two eyes into a side-by-side preview frame.
+- Sends JPEG preview frames over TCP 47991 to QuestLink Quest v7.10.
+- Receives Quest orientation data and feeds it into xrLocateViews / VIEW pose.
+- Intended as the first end-to-end bridge test.
 
-V0.2 PROGRESS
-- QuestLink registers as the Windows OpenXR runtime.
-- Exposes a prototype virtual stereo HMD.
-- Adds XR_KHR_D3D11_enable support.
-- Creates a D3D11 OpenXR session from the game's graphics device.
-- Creates real D3D11 swapchain textures for the game to render into.
-- Supports acquire / wait / release swapchain flow.
-- Supports wait / begin / end frame flow at a prototype 90 Hz timing.
-- Supports VIEW / LOCAL / STAGE reference spaces.
-- Supplies static prototype head/eye poses.
-- Adds neutral OpenXR action/input plumbing so apps can create input actions.
-- QuestLink PC v7.8 tries Gorilla Tag directly with -vrmode openxr when QuestLink is active, without starting SteamVR.
+CURRENT LIMITS
+- This is NOT final Virtual Desktop-quality streaming yet.
+- Preview uses JPEG and a low test frame rate instead of hardware H.264/H.265.
+- The Quest client displays the received stereo preview as a 2D full-screen view, not a final low-latency immersive compositor layer.
+- Controller tracking is not wired yet.
+- Position tracking is still fixed at standing height; orientation is the live portion of the test.
+- If Gorilla Tag ignores OpenXR and chooses OpenVR, an OpenVR compatibility path will still be needed.
 
-NOT DONE YET
-The Quest headset streaming/compositor bridge is not complete. V0.2 can accept the PC game's D3D11 render frames into QuestLink-owned swapchains, but those frames are not yet encoded and sent to the Quest app. Real headset/controller poses are also not connected yet.
-
-If a game still chooses OpenVR instead of OpenXR, the later OpenVR compatibility shim will be needed.
+RESTORE
+Run RESTORE_PREVIOUS_RUNTIME.bat to restore the prior OpenXR runtime.
