@@ -1,0 +1,6 @@
+{
+  "alwaysActivate": true,
+  "name": "questlink",
+  "redirectsDisplay": true,
+  "hmd_presence": ["*.*"]
+}
