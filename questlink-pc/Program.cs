@@ -23,7 +23,7 @@ internal static class Program
 public sealed class MainForm : Form
 {
     private const int Port = 47990;
-    private const string Version = "7.8";
+    private const string Version = "7.9";
 
     private readonly Label status = new();
     private readonly Label ipLabel = new();
@@ -36,6 +36,10 @@ public sealed class MainForm : Form
     private readonly Button launchSelected = new();
     private readonly Button refreshGames = new();
     private readonly Button openSteamVrSettings = new();
+    private readonly Label runtimeStatus = new();
+    private readonly Label runtimePath = new();
+    private readonly Button refreshRuntime = new();
+    private readonly Button launchGtagQuick = new();
 
     private readonly CancellationTokenSource cts = new();
     private List<VrGame> currentGames = new();
@@ -55,6 +59,7 @@ public sealed class MainForm : Form
         Shown += async (_, _) =>
         {
             _ = Task.Run(() => RunServerAsync(cts.Token));
+            RefreshRuntimeStatus();
             await ReloadGamesAsync();
         };
         FormClosing += (_, _) => cts.Cancel();
@@ -99,6 +104,37 @@ public sealed class MainForm : Form
             11, true);
         native.SetBounds(28, 250, 700, 30);
         home.Controls.Add(native);
+
+        var runtimeTitle = MakeLabel("QuestLink OpenXR Runtime", 15, true);
+        runtimeTitle.SetBounds(28, 310, 420, 32);
+        home.Controls.Add(runtimeTitle);
+
+        runtimeStatus.SetBounds(28, 352, 760, 28);
+        runtimeStatus.Font = new Font("Segoe UI", 11f, FontStyle.Bold);
+        home.Controls.Add(runtimeStatus);
+
+        runtimePath.SetBounds(28, 385, 790, 52);
+        runtimePath.AutoSize = false;
+        runtimePath.ForeColor = Color.LightGray;
+        home.Controls.Add(runtimePath);
+
+        refreshRuntime.Text = "Refresh Runtime Status";
+        refreshRuntime.SetBounds(28, 448, 210, 42);
+        refreshRuntime.Click += (_, _) => RefreshRuntimeStatus();
+        home.Controls.Add(refreshRuntime);
+
+        launchGtagQuick.Text = "Launch Gorilla Tag with QuestLink";
+        launchGtagQuick.SetBounds(260, 448, 360, 52);
+        launchGtagQuick.Font = new Font("Segoe UI", 11f, FontStyle.Bold);
+        launchGtagQuick.Click += async (_, _) => await LaunchGorillaTagQuickAsync();
+        home.Controls.Add(launchGtagQuick);
+
+        var launchHint = MakeLabel(
+            "This stops SteamVR, checks that QuestLink is the active OpenXR runtime, then starts Gorilla Tag in OpenXR mode.",
+            9.5f, false);
+        launchHint.SetBounds(28, 515, 790, 55);
+        launchHint.AutoSize = false;
+        home.Controls.Add(launchHint);
 
         games.SetBounds(22, 22, 600, 460);
         games.BackColor = Color.FromArgb(20, 23, 30);
@@ -195,6 +231,47 @@ public sealed class MainForm : Form
     {
         worldScaleValue.Text = worldScale.Value + "%";
         renderScaleValue.Text = renderScale.Value + "%";
+    }
+
+    private void RefreshRuntimeStatus()
+    {
+        var active = QuestLinkRuntimeRegistry.IsQuestLinkActive();
+        runtimeStatus.Text = active
+            ? "ACTIVE — QuestLink will receive OpenXR games."
+            : "INACTIVE — Windows is using a different OpenXR runtime.";
+        runtimeStatus.ForeColor = active ? Color.LightGreen : Color.Orange;
+        runtimePath.Text = "ActiveRuntime: " + QuestLinkRuntimeRegistry.GetActiveRuntime();
+        launchGtagQuick.Enabled = active;
+    }
+
+    private async Task LaunchGorillaTagQuickAsync()
+    {
+        RefreshRuntimeStatus();
+
+        if (!QuestLinkRuntimeRegistry.IsQuestLinkActive())
+        {
+            MessageBox.Show(
+                "QuestLink is not the active OpenXR runtime. Run the runtime installer first.",
+                "QuestLink");
+            return;
+        }
+
+        var list = await SteamVrLibrary.GetVrGamesAsync();
+        var game = list.FirstOrDefault(g =>
+            g.Name.Equals("Gorilla Tag", StringComparison.OrdinalIgnoreCase) ||
+            g.AppId == "1533390");
+
+        if (game is null)
+        {
+            MessageBox.Show("Gorilla Tag was not found in your Steam library.", "QuestLink");
+            return;
+        }
+
+        var result = await Launcher.LaunchGameAsync(game);
+        status.Text = result.Message;
+
+        if (!result.Ok)
+            MessageBox.Show(result.Message, "QuestLink");
     }
 
     private async Task ReloadGamesAsync()
@@ -330,12 +407,23 @@ public sealed class MainForm : Form
                             "launch_game",
                             "gtag_openxr",
                             "questlink_runtime_detection",
+                            "questlink_runtime_status",
+                            "gtag_quick_launch",
                             "meta_pcvr_library",
                             "bepinex_detection",
                             "steamvr_world_scale",
                             "steamvr_render_scale",
                             "remote_steamvr_settings"
                         }
+                    };
+                }
+                else if (cmd == "runtime_status")
+                {
+                    response = new
+                    {
+                        ok = true,
+                        active = QuestLinkRuntimeRegistry.IsQuestLinkActive(),
+                        active_runtime = QuestLinkRuntimeRegistry.GetActiveRuntime()
                     };
                 }
                 else if (cmd == "list_games")
@@ -527,44 +615,6 @@ public static class Launcher
         });
 
         return new LaunchResult(true, $"Launching {game.Name} through Steam.");
-    }
-
-    private static async Task DelayedSteamVrGorillaTagLaunchAsync(VrGame game)
-    {
-        // Give the user time to enter Quest Link first.
-        await Task.Delay(TimeSpan.FromSeconds(8));
-
-        try
-        {
-            Process.Start(new ProcessStartInfo
-            {
-                FileName = "steam://rungameid/250820",
-                UseShellExecute = true
-            });
-        }
-        catch
-        {
-            return;
-        }
-
-        // Give SteamVR time to initialize against the Quest Link headset.
-        await Task.Delay(TimeSpan.FromSeconds(8));
-
-        var exe = SteamVrLibrary.FindInstalledExe(game.AppId, "Gorilla Tag.exe");
-        if (exe is null)
-            return;
-
-        try
-        {
-            Process.Start(new ProcessStartInfo
-            {
-                FileName = exe,
-                Arguments = "-vrmode openvr",
-                WorkingDirectory = Path.GetDirectoryName(exe)!,
-                UseShellExecute = true
-            });
-        }
-        catch { }
     }
 
     private static void StartMetaQuestLink()
