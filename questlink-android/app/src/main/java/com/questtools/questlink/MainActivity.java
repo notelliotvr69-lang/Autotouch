@@ -31,7 +31,7 @@ import java.util.*;
 public class MainActivity extends Activity implements SensorEventListener {
     private static final int PORT = 47990;
     private static final int STREAM_PORT = 47991;
-    private static final String VERSION = "7.10";
+    private static final String VERSION = "7.11";
 
     private static final int BG = Color.rgb(9, 11, 17);
     private static final int PANEL = Color.rgb(20, 23, 34);
@@ -399,7 +399,7 @@ public class MainActivity extends Activity implements SensorEventListener {
         addSpace(root, 18);
 
         TextView bridge = muted(
-                "V7.10 can receive the runtime's first live stereo stream preview and send Quest orientation back to the PC runtime. This is the bridge test build, not final low-latency immersive VR yet.",
+                "V7.11 supports the Gorilla Tag SteamVR/OpenVR path: live QuestLink stream preview plus Quest orientation return. This is still a bridge test build, not final low-latency immersive VR yet.",
                 12);
         bridge.setGravity(Gravity.CENTER);
         root.addView(bridge);
@@ -483,8 +483,8 @@ public class MainActivity extends Activity implements SensorEventListener {
 
         refreshButton.setEnabled(isConnected);
         openSteamVrButton.setEnabled(isConnected);
-        launchGtagButton.setEnabled(isConnected && questLinkRuntimeActive);
-        if (streamButton != null) streamButton.setEnabled(isConnected && questLinkRuntimeActive);
+        launchGtagButton.setEnabled(isConnected);
+        if (streamButton != null) streamButton.setEnabled(isConnected);
     }
 
     private void connectAndLoad() {
@@ -517,14 +517,15 @@ public class MainActivity extends Activity implements SensorEventListener {
     private void loadRuntimeStatus() {
         request("runtime_status", null, result -> {
             questLinkRuntimeActive = result.optBoolean("active", false);
-            runtimePill.setText(questLinkRuntimeActive ? "QUESTLINK RUNTIME ACTIVE" : "OTHER RUNTIME ACTIVE");
-            runtimePill.setTextColor(questLinkRuntimeActive ? GREEN : ORANGE);
+            boolean openVrReady = result.optBoolean("openvr_driver", false);
+            runtimePill.setText(openVrReady ? "QUESTLINK OPENVR READY" : "OPENVR DRIVER INSTALLS ON LAUNCH");
+            runtimePill.setTextColor(openVrReady ? GREEN : ORANGE);
             runtimePill.setBackground(rounded(
                     questLinkRuntimeActive ? Color.argb(38, 101, 214, 139) : Color.argb(38, 255, 183, 77),
                     18,
                     questLinkRuntimeActive ? Color.argb(110, 101, 214, 139) : Color.argb(110, 255, 183, 77)));
-            launchGtagButton.setEnabled(connected && questLinkRuntimeActive);
-            if (streamButton != null) streamButton.setEnabled(connected && questLinkRuntimeActive);
+            launchGtagButton.setEnabled(connected);
+            if (streamButton != null) streamButton.setEnabled(connected);
         });
     }
 
@@ -673,15 +674,15 @@ public class MainActivity extends Activity implements SensorEventListener {
         try {
             JSONObject extra = new JSONObject();
             extra.put("appid", "1533390");
-            status.setText("Launching Gorilla Tag with QuestLink runtime...");
+            status.setText("Launching Gorilla Tag through QuestLink OpenVR / SteamVR...");
 
             request("launch_game", extra, result -> {
                 status.setText(result.optString("message", "Gorilla Tag launch command sent."));
                 loadRuntimeStatus();
                 loadGtagMods();
 
-                // The runtime stream server starts when the game creates its OpenXR session.
-                // Retry for a while so the user does not need to time the connection manually.
+                // The stream server starts when SteamVR loads the QuestLink OpenVR driver.
+                // Retry so the user does not need to time the connection manually.
                 startStreamPreviewWithRetry(30);
             });
         } catch (Exception ex) {
