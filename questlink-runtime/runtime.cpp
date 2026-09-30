@@ -38,6 +38,7 @@ struct SessionState {
     ID3D11DeviceContext* context = nullptr;
     bool running = false;
     bool frameBegun = false;
+    bool profileChanged = false;
     XrSessionState state = XR_SESSION_STATE_IDLE;
     uint64_t frameIndex = 0;
     XrTime nextFrame = 0;
@@ -147,8 +148,18 @@ SOCKET g_bridgeClient = INVALID_SOCKET;
 std::mutex g_socketMutex;
 
 constexpr uint16_t kStreamPort = 47991;
-constexpr uint32_t kEyeStreamWidth = 640;
-constexpr uint32_t kEyeStreamHeight = 672;
+uint32_t kEyeStreamWidth = 1680;
+uint32_t kEyeStreamHeight = 1760;
+uint32_t g_videoBitrate = 36000000;
+
+void loadStreamQuality() {
+    kEyeStreamWidth=1680;kEyeStreamHeight=1760;g_videoBitrate=36000000;
+    char* local=nullptr;size_t length=0;_dupenv_s(&local,&length,"LOCALAPPDATA");
+    std::string mode;
+    if(local){std::ifstream file(std::string(local)+"\\QuestLink\\stream-quality.txt");file>>mode;free(local);}
+    if(mode=="smooth"){kEyeStreamWidth=1280;kEyeStreamHeight=1344;g_videoBitrate=24000000;}
+    if(mode=="native"){kEyeStreamWidth=2064;kEyeStreamHeight=2208;g_videoBitrate=55000000;}
+}
 
 
 void logLine(const std::string& text) {
@@ -492,11 +503,14 @@ void captureProjectionFrame(SessionState* session, const XrFrameEndInfo* frameEn
 }
 
 void receiveHeadPoseLoop(SOCKET client, std::atomic<bool>& alive) {
+    uint32_t previousFlags=~0u;
     while(g_bridgeRunning && alive) {
         uint8_t payload[ql::TrackingBytes];
         if(!recvAll(client,payload,sizeof(payload)))break;
         try {
             auto t=ql::decodeTracking(payload,sizeof(payload));
+            uint32_t flags=t.focused|(t.hands[0].gripFlags<<4)|(t.hands[1].gripFlags<<8);
+            if(flags!=previousFlags){logLine("Tracking: focused="+std::to_string(t.focused)+" left="+std::to_string(t.hands[0].gripFlags)+" right="+std::to_string(t.hands[1].gripFlags));previousFlags=flags;}
             std::lock_guard<std::mutex> lock(g_trackingMutex);
             g_tracking=t;g_trackingTime=std::chrono::steady_clock::now();
         } catch(const std::exception& e){logLine(e.what());break;}
@@ -564,7 +578,7 @@ void bridgeServerLoop() {
         {std::lock_guard<std::mutex> lock(g_trackingMutex);g_tracking={};g_trackingTime={};}
         g_clientConnected=true;
         ql::H264Encoder encoder;
-        bool h264=allowH264&&encoder.open(kEyeStreamWidth*2,kEyeStreamHeight,72,12000000,allowHardware);
+        bool h264=allowH264&&encoder.open(kEyeStreamWidth*2,kEyeStreamHeight,72,g_videoBitrate,allowHardware);
         logLine(h264?(encoder.hardware()?"Video encoder: hardware H264":"Video encoder: software H264"):"Video encoder unavailable: JPEG fallback");
         std::atomic<bool> alive{true};
         std::thread receiver(receiveHeadPoseLoop, client, std::ref(alive));
@@ -676,6 +690,8 @@ static XrResult XRAPI_CALL ql_xrCreateInstance(
 
     g_instance = reinterpret_cast<XrInstance>(&g_instanceState);
     *instance = g_instance;
+    loadStreamQuality();
+    logLine("Stream per eye: "+std::to_string(kEyeStreamWidth)+"x"+std::to_string(kEyeStreamHeight));
     logLine(std::string("xrCreateInstance: ") + createInfo->applicationInfo.applicationName);
     return XR_SUCCESS;
 }
@@ -697,7 +713,7 @@ static XrResult XRAPI_CALL ql_xrGetInstanceProperties(
     if (!validInstance(instance)) return XR_ERROR_HANDLE_INVALID;
     if (!properties) return XR_ERROR_VALIDATION_FAILURE;
     properties->runtimeVersion = XR_MAKE_VERSION(0, 4, 0);
-    copyText(properties->runtimeName, "QuestLink OpenXR Runtime v0.4-dev");
+    copyText(properties->runtimeName, "QuestLink OpenXR Runtime v0.5-dev");
     return XR_SUCCESS;
 }
 
@@ -908,7 +924,18 @@ static XrResult XRAPI_CALL ql_xrPollEvent(
     if (!eventData) return XR_ERROR_VALIDATION_FAILURE;
 
     std::lock_guard<std::mutex> lock(g_mutex);
-    if (g_events.empty()) return XR_EVENT_UNAVAILABLE;
+    if (g_events.empty()) {
+        for(auto& [session,state]:g_sessions) {
+            if(!state->profileChanged)continue;
+            state->profileChanged=false;
+            XrEventDataInteractionProfileChanged changed{XR_TYPE_EVENT_DATA_INTERACTION_PROFILE_CHANGED};
+            changed.session=session;
+            memset(eventData,0,sizeof(*eventData));memcpy(eventData,&changed,sizeof(changed));
+            logLine("Controller interaction profile announced: Oculus Touch (both hands)");
+            return XR_SUCCESS;
+        }
+        return XR_EVENT_UNAVAILABLE;
+    }
 
     auto e = g_events.front();
     g_events.pop_front();
@@ -1303,7 +1330,8 @@ static XrResult XRAPI_CALL ql_xrAttachSessionActionSets(XrSession session,const 
     auto* s=getSession(session);if(!s)return XR_ERROR_HANDLE_INVALID;if(!info)return XR_ERROR_VALIDATION_FAILURE;
     if(!s->attached.empty())return XR_ERROR_ACTIONSETS_ALREADY_ATTACHED;
     for(uint32_t i=0;i<info->countActionSets;++i)if(!g_actionSets.count(info->actionSets[i]))return XR_ERROR_HANDLE_INVALID;
-    s->attached.assign(info->actionSets,info->actionSets+info->countActionSets);return XR_SUCCESS;
+    s->attached.assign(info->actionSets,info->actionSets+info->countActionSets);
+    s->profileChanged=true;return XR_SUCCESS;
 }
 static InputValue bindingValue(const std::string& binding,const ql::Hand& h,XrActionType type,bool focused) {
     InputValue v;if(!focused)return v;v.active=true;
@@ -1560,7 +1588,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrNegotiateLoaderRuntimeInterface(
     runtimeRequest->runtimeApiVersion = XR_CURRENT_API_VERSION;
     runtimeRequest->getInstanceProcAddr = ql_xrGetInstanceProcAddr;
 
-    logLine("xrNegotiateLoaderRuntimeInterface: QuestLink v0.4-dev");
+    logLine("xrNegotiateLoaderRuntimeInterface: QuestLink v0.5-dev");
     return XR_SUCCESS;
 }
 

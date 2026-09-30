@@ -14,7 +14,7 @@ constexpr uint32_t VideoMagic = 0x514c4632;    // QLF2
 constexpr uint32_t HelloMagic = 0x514c4332;    // QLC2
 constexpr size_t TrackingBytes = 300;
 constexpr size_t VideoHeaderBytes = 116;
-constexpr uint32_t MaxVideoBytes = 4 * 1024 * 1024;
+constexpr uint32_t MaxVideoBytes = 16 * 1024 * 1024;
 constexpr XrPosef Identity{{0,0,0,1},{0,0,0}};
 constexpr uint32_t Tracked = 3; // orientation + position valid/tracked
 enum Button : uint32_t { Primary=1, Secondary=2, Stick=4, Menu=8,
@@ -77,7 +77,7 @@ inline std::vector<uint8_t> encode(const VideoHeader& v) {
 inline VideoHeader decodeVideo(const uint8_t* p,size_t n) {
     if(n!=VideoHeaderBytes)throw std::runtime_error("Invalid video header");Reader r{p,n};if(r.u32()!=VideoMagic)throw std::runtime_error("Runtime upgrade required");
     VideoHeader v;v.width=r.u32();v.height=r.u32();v.id=r.u64();v.codec=r.u32();v.bytes=r.u32();for(auto& e:v.eyes)e=r.eye();
-    if(v.width==0||v.width>4096||v.width%2||v.height==0||v.height>4096||v.bytes==0||v.bytes>MaxVideoBytes||(v.codec!=1&&v.codec!=2))throw std::runtime_error("Invalid video dimensions/codec/length");return v;
+    if(v.width==0||v.width>8192||v.width%2||v.height==0||v.height>4096||v.bytes==0||v.bytes>MaxVideoBytes||(v.codec!=1&&v.codec!=2))throw std::runtime_error("Invalid video dimensions/codec/length");return v;
 }
 inline XrQuaternionf mul(XrQuaternionf a,XrQuaternionf b) {return {a.w*b.x+a.x*b.w+a.y*b.z-a.z*b.y,a.w*b.y-a.x*b.z+a.y*b.w+a.z*b.x,a.w*b.z+a.x*b.y-a.y*b.x+a.z*b.w,a.w*b.w-a.x*b.x-a.y*b.y-a.z*b.z};}
 inline XrVector3f rotate(XrQuaternionf q,XrVector3f v) {auto p=mul(mul(q,{v.x,v.y,v.z,0}),{-q.x,-q.y,-q.z,q.w});return {p.x,p.y,p.z};}

@@ -23,7 +23,7 @@ jobs:
       - name: Publish and stage PC app
         shell: pwsh
         run: |
-          $stage = 'dist/QuestLinkPC-v7.12-dev'
+          $stage = 'dist/QuestLinkPC-v7.13-dev'
           dotnet publish questlink-pc/QuestLink.PC.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o $stage
           if ($LASTEXITCODE -ne 0) { throw 'PC build failed' }
           New-Item -ItemType Directory -Force "$stage/opencomposite" | Out-Null
@@ -34,14 +34,14 @@ jobs:
           Copy-Item $backend.FullName "$stage/opencomposite/opencomposite_backend.dll"
           Copy-Item openvr_api.dll "$stage/opencomposite/openvr_api.dll"
           Copy-Item questlink-pc/compat/README.md "$stage/COMPATIBILITY.md"
-          Copy-Item questlink-pc/README-7.12.txt "$stage/README.txt"
+          Copy-Item questlink-pc/README-7.13.txt "$stage/README.txt"
           python questlink-pc/compat/test_exports.py "$stage/opencomposite"
           if ($LASTEXITCODE -ne 0) { throw 'DLL forwarding test failed' }
-          Compress-Archive "$stage/*" dist/QuestLinkPC-v7.12-dev.zip
+          Compress-Archive "$stage/*" dist/QuestLinkPC-v7.13-dev.zip
       - uses: actions/upload-artifact@v4
         with:
-          name: QuestLinkPC-v7.12-dev
-          path: dist/QuestLinkPC-v7.12-dev.zip
+          name: QuestLinkPC-v7.13-dev
+          path: dist/QuestLinkPC-v7.13-dev.zip
           compression-level: 0
       - name: Publish development download
         if: github.ref == 'refs/heads/codex/quest3-wireless-vr'
@@ -49,10 +49,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $tag = 'questlink-pc-v7.12-dev'
+          $tag = 'questlink-pc-v7.13-dev'
           gh release view $tag --repo '${{ github.repository }}' *> $null
           if ($LASTEXITCODE -ne 0) {
-            gh release create $tag --target '${{ github.sha }}' --repo '${{ github.repository }}' --prerelease --title 'QuestLink PC v7.12-dev' --notes 'Fixes the missing VRHeadsetView export that prevents the Unity OpenVR plugin from loading. Adds early game-exit detection. Experimental: headset gameplay remains to be verified. Use with Quest APK 7.12-dev and runtime 0.4-dev.'
+            gh release create $tag --target '${{ github.sha }}' --repo '${{ github.repository }}' --prerelease --title 'QuestLink PC v7.13-dev' --notes 'Fixes the missing VRHeadsetView export that prevents the Unity OpenVR plugin from loading. Adds early game-exit detection. Experimental: headset gameplay remains to be verified. Use with Quest APK 7.13-dev and runtime 0.5-dev.'
           }
-          gh release upload $tag dist/QuestLinkPC-v7.12-dev.zip --repo '${{ github.repository }}' --clobber
+          gh release upload $tag dist/QuestLinkPC-v7.13-dev.zip --repo '${{ github.repository }}' --clobber
           if ($LASTEXITCODE -ne 0) { throw 'Release upload failed' }

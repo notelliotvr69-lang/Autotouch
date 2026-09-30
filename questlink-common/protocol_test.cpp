@@ -9,6 +9,8 @@ int main(){
     for(size_t i=0;i<p.size();++i){bool rejected=false;try{ql::decodeTracking(p.data(),i);}catch(...){rejected=true;}assert(rejected);}
     t.head.position.x=std::numeric_limits<float>::quiet_NaN();p=ql::encode(t);bool rejected=false;try{ql::decodeTracking(p.data(),p.size());}catch(...){rejected=true;}assert(rejected);
     ql::VideoHeader h;h.bytes=123;h.id=0x0123456789abcdef;auto b=ql::encode(h);assert(b.size()==ql::VideoHeaderBytes);auto decoded=ql::decodeVideo(b.data(),b.size());assert(decoded.id==h.id&&decoded.bytes==123);
+    h.width=4128;h.height=2208;b=ql::encode(h);decoded=ql::decodeVideo(b.data(),b.size());assert(decoded.width==4128&&decoded.height==2208);
+    h.width=8194;b=ql::encode(h);rejected=false;try{ql::decodeVideo(b.data(),b.size());}catch(...){rejected=true;}assert(rejected);h.width=4128;
     h.bytes=ql::MaxVideoBytes+1;b=ql::encode(h);rejected=false;try{ql::decodeVideo(b.data(),b.size());}catch(...){rejected=true;}assert(rejected);
     auto a=ql::Identity;a.orientation={0,0,.70710678f,.70710678f};a.position={1,2,3};auto point=ql::Identity;point.position={1,0,0};auto world=ql::compose(a,point);assert(std::abs(world.position.x-1)<1e-5&&std::abs(world.position.y-3)<1e-5);
     auto relative=ql::compose(ql::inverse(a),world);assert(std::abs(relative.position.x-1)<1e-5&&std::abs(relative.position.y)<1e-5);

@@ -123,6 +123,7 @@ struct Client {
     XrInstance instance=XR_NULL_HANDLE;XrSession session=XR_NULL_HANDLE;XrSystemId system=0;
     XrSpace stage=XR_NULL_HANDLE,head=XR_NULL_HANDLE,gripSpace[2]{},aimSpace[2]{};
     XrActionSet actionSet=XR_NULL_HANDLE;XrAction grip{},aim{},trigger{},squeeze{},stick{},buttons[9]{};XrPath hands[2]{};
+    uint32_t eyeWidth=0,eyeHeight=0;
     XrSwapchain chains[2]{};std::vector<XrSwapchainImageOpenGLESKHR> images[2];
     EGLDisplay display=EGL_NO_DISPLAY;EGLContext context=EGL_NO_CONTEXT;EGLSurface surface=EGL_NO_SURFACE;
     GLuint programs[2]{},texture=0,externalTexture=0,fbo=0,vao=0;
@@ -181,10 +182,16 @@ struct Client {
         XrSessionActionSetsAttachInfo attach{XR_TYPE_SESSION_ACTION_SETS_ATTACH_INFO};attach.countActionSets=1;attach.actionSets=&actionSet;XR(xrAttachSessionActionSets(session,&attach));
     }
     GLuint shader(GLenum kind,const std::string& text){GLuint s=glCreateShader(kind);const char* p=text.c_str();glShaderSource(s,1,&p,nullptr);glCompileShader(s);GLint ok;glGetShaderiv(s,GL_COMPILE_STATUS,&ok);if(!ok){char log[1024];glGetShaderInfoLog(s,sizeof(log),nullptr,log);throw std::runtime_error(log);}return s;}
+    void resizeSwapchains(uint32_t width,uint32_t height){
+        if(width==eyeWidth&&height==eyeHeight)return;
+        uint32_t count=0;
+        for(int i=0;i<2;++i){if(chains[i]){XR(xrDestroySwapchain(chains[i]));chains[i]=XR_NULL_HANDLE;} XrSwapchainCreateInfo c{XR_TYPE_SWAPCHAIN_CREATE_INFO};c.usageFlags=XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT;c.format=GL_RGBA8;c.sampleCount=1;c.width=width;c.height=height;c.faceCount=1;c.arraySize=1;c.mipCount=1;XR(xrCreateSwapchain(session,&c,&chains[i]));XR(xrEnumerateSwapchainImages(chains[i],0,&count,nullptr));images[i].resize(count,{XR_TYPE_SWAPCHAIN_IMAGE_OPENGL_ES_KHR});XR(xrEnumerateSwapchainImages(chains[i],count,&count,reinterpret_cast<XrSwapchainImageBaseHeader*>(images[i].data())));}
+        eyeWidth=width;eyeHeight=height;
+    }
     void initGraphics(){
         uint32_t count=0;XR(xrEnumerateSwapchainFormats(session,0,&count,nullptr));std::vector<int64_t> formats(count);XR(xrEnumerateSwapchainFormats(session,count,&count,formats.data()));
         if(std::find(formats.begin(),formats.end(),GL_RGBA8)==formats.end())throw std::runtime_error("RGBA8 swapchain unavailable");
-        for(int i=0;i<2;++i){XrSwapchainCreateInfo c{XR_TYPE_SWAPCHAIN_CREATE_INFO};c.usageFlags=XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT;c.format=GL_RGBA8;c.sampleCount=1;c.width=640;c.height=672;c.faceCount=1;c.arraySize=1;c.mipCount=1;XR(xrCreateSwapchain(session,&c,&chains[i]));XR(xrEnumerateSwapchainImages(chains[i],0,&count,nullptr));images[i].resize(count,{XR_TYPE_SWAPCHAIN_IMAGE_OPENGL_ES_KHR});XR(xrEnumerateSwapchainImages(chains[i],count,&count,reinterpret_cast<XrSwapchainImageBaseHeader*>(images[i].data())));}
+
         std::string vertex="#version 300 es\nprecision highp float;out vec2 uv;void main(){vec2 p=vec2(float((gl_VertexID<<1)&2),float(gl_VertexID&2));uv=p;gl_Position=vec4(p*2.0-1.0,0,1);}";
         for(int i=0;i<2;++i){std::string fragment="#version 300 es\n";if(i)fragment+="#extension GL_OES_EGL_image_external_essl3 : require\n";
             fragment+="precision highp float;in vec2 uv;out vec4 color;uniform float eye;uniform mat4 texMatrix;uniform ";fragment+=i?"samplerExternalOES":"sampler2D";fragment+=" video;void main(){vec2 p=vec2((uv.x+eye)*0.5,";fragment+=i?"uv.y":"1.0-uv.y";fragment+=");color=texture(video,(texMatrix*vec4(p,0,1)).xy);}";
@@ -218,13 +225,14 @@ struct Client {
         auto t=tracking(state.predictedDisplayTime);stream.publish(t);latch();
         bool draw=state.shouldRender&&hasImage&&Clock::now()-shownTime<std::chrono::milliseconds(250)&&t.headFlags==ql::Tracked;
         XrCompositionLayerProjectionView views[2]{{XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW},{XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW}};
+        if(draw)resizeSwapchains(shown.width/2,shown.height);
         if(draw)for(int eye=0;eye<2;++eye){
             uint32_t index;XrSwapchainImageAcquireInfo acquire{XR_TYPE_SWAPCHAIN_IMAGE_ACQUIRE_INFO};XR(xrAcquireSwapchainImage(chains[eye],&acquire,&index));XrSwapchainImageWaitInfo w{XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO};w.timeout=XR_INFINITE_DURATION;XR(xrWaitSwapchainImage(chains[eye],&w));
             glBindFramebuffer(GL_FRAMEBUFFER,fbo);glFramebufferTexture2D(GL_FRAMEBUFFER,GL_COLOR_ATTACHMENT0,GL_TEXTURE_2D,images[eye][index].image,0);if(glCheckFramebufferStatus(GL_FRAMEBUFFER)!=GL_FRAMEBUFFER_COMPLETE)throw std::runtime_error("Invalid VR framebuffer");
-            glViewport(0,0,640,672);glDisable(GL_DEPTH_TEST);glDisable(GL_CULL_FACE);glBindVertexArray(vao);GLuint p=programs[external?1:0];glUseProgram(p);glActiveTexture(GL_TEXTURE0);glBindTexture(external?GL_TEXTURE_EXTERNAL_OES:GL_TEXTURE_2D,external?externalTexture:texture);glUniform1i(glGetUniformLocation(p,"video"),0);glUniform1f(glGetUniformLocation(p,"eye"),float(eye));float identity[16]{1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1};glUniformMatrix4fv(glGetUniformLocation(p,"texMatrix"),1,GL_FALSE,external?matrix:identity);glDrawArrays(GL_TRIANGLES,0,3);glFlush();
+            glViewport(0,0,eyeWidth,eyeHeight);glDisable(GL_DEPTH_TEST);glDisable(GL_CULL_FACE);glBindVertexArray(vao);GLuint p=programs[external?1:0];glUseProgram(p);glActiveTexture(GL_TEXTURE0);glBindTexture(external?GL_TEXTURE_EXTERNAL_OES:GL_TEXTURE_2D,external?externalTexture:texture);glUniform1i(glGetUniformLocation(p,"video"),0);glUniform1f(glGetUniformLocation(p,"eye"),float(eye));float identity[16]{1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1};glUniformMatrix4fv(glGetUniformLocation(p,"texMatrix"),1,GL_FALSE,external?matrix:identity);glDrawArrays(GL_TRIANGLES,0,3);glFlush();
             XrSwapchainImageReleaseInfo release{XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO};XR(xrReleaseSwapchainImage(chains[eye],&release));
             // Preserve the PC render pose. Meta's compositor reprojects to current head pose.
-            views[eye].pose=shown.eyes[eye].pose;views[eye].fov=shown.eyes[eye].fov;views[eye].subImage.swapchain=chains[eye];views[eye].subImage.imageRect.extent={640,672};
+            views[eye].pose=shown.eyes[eye].pose;views[eye].fov=shown.eyes[eye].fov;views[eye].subImage.swapchain=chains[eye];views[eye].subImage.imageRect.extent={int32_t(eyeWidth),int32_t(eyeHeight)};
         }
         XrCompositionLayerProjection layer{XR_TYPE_COMPOSITION_LAYER_PROJECTION};layer.space=stage;layer.viewCount=2;layer.views=views;const XrCompositionLayerBaseHeader* layers[]={reinterpret_cast<XrCompositionLayerBaseHeader*>(&layer)};
         XrFrameEndInfo end{XR_TYPE_FRAME_END_INFO};end.displayTime=state.predictedDisplayTime;end.environmentBlendMode=XR_ENVIRONMENT_BLEND_MODE_OPAQUE;end.layerCount=draw?1:0;end.layers=draw?layers:nullptr;XR(xrEndFrame(session,&end));

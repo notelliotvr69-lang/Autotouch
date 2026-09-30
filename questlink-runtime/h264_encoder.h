@@ -17,7 +17,7 @@ class H264Encoder {
     template<class T> using Ptr=Microsoft::WRL::ComPtr<T>;
     Ptr<IMFTransform> transform;
     Ptr<IMFMediaEventGenerator> events;
-    uint32_t width=0,height=0,fps=72;
+    uint32_t width=0,height=0,fps=72,bitrate=36000000;
     LONGLONG index=0;
     bool com=false,mf=false,async=false;
     bool hardwareSelected=false;
@@ -38,7 +38,7 @@ class H264Encoder {
         Ptr<IMFMediaType> output,input;
         if(FAILED(MFCreateMediaType(&output))||FAILED(MFCreateMediaType(&input)))return false;
         output->SetGUID(MF_MT_MAJOR_TYPE,MFMediaType_Video);output->SetGUID(MF_MT_SUBTYPE,MFVideoFormat_H264);
-        output->SetUINT32(MF_MT_AVG_BITRATE,12000000);output->SetUINT32(MF_MT_INTERLACE_MODE,MFVideoInterlace_Progressive);
+        output->SetUINT32(MF_MT_AVG_BITRATE,bitrate);output->SetUINT32(MF_MT_INTERLACE_MODE,MFVideoInterlace_Progressive);
         output->SetUINT32(MF_MT_MPEG2_PROFILE,66);
         MFSetAttributeSize(output.Get(),MF_MT_FRAME_SIZE,width,height);MFSetAttributeRatio(output.Get(),MF_MT_FRAME_RATE,fps,1);MFSetAttributeRatio(output.Get(),MF_MT_PIXEL_ASPECT_RATIO,1,1);
         booleanSetting(CODECAPI_AVLowLatencyMode,true);setting(CODECAPI_AVEncMPVDefaultBPictureCount,0);setting(CODECAPI_AVEncMPVGOPSize,fps);
@@ -62,8 +62,8 @@ class H264Encoder {
 public:
     ~H264Encoder(){events.Reset();transform.Reset();if(mf)MFShutdown();if(com)CoUninitialize();}
     bool hardware() const { return hardwareSelected; }
-    bool open(uint32_t w,uint32_t h,uint32_t rate,uint32_t,bool allowHardware=true) {
-        width=w;height=h;fps=rate;
+    bool open(uint32_t w,uint32_t h,uint32_t rate,uint32_t bitsPerSecond,bool allowHardware=true) {
+        width=w;height=h;fps=rate;bitrate=bitsPerSecond;
         com=SUCCEEDED(CoInitializeEx(nullptr,COINIT_MULTITHREADED));
         mf=SUCCEEDED(MFStartup(MF_VERSION));if(!mf)return false;
         MFT_REGISTER_TYPE_INFO in{MFMediaType_Video,MFVideoFormat_NV12},out{MFMediaType_Video,MFVideoFormat_H264};

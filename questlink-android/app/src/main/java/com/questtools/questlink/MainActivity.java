@@ -31,7 +31,7 @@ import java.util.*;
 public class MainActivity extends Activity implements SensorEventListener {
     private static final int PORT = 47990;
     private static final int STREAM_PORT = 47991;
-    private static final String VERSION = "7.12-dev";
+    private static final String VERSION = "7.13-dev";
 
     private static final int BG = Color.rgb(9, 11, 17);
     private static final int PANEL = Color.rgb(20, 23, 34);

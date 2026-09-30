@@ -23,7 +23,7 @@ internal static class Program
 public sealed class MainForm : Form
 {
     private const int Port = 47990;
-    private const string Version = "7.12-dev";
+    private const string Version = "7.13-dev";
 
     private readonly Label status = new();
     private readonly Label lanStatus = new();
@@ -88,6 +88,25 @@ public sealed class MainForm : Form
         tabs.TabPages.Add(library);
         tabs.TabPages.Add(steamvr);
         tabs.TabPages.Add(mods);
+        var video = new TabPage("VR Quality") { BackColor=BackColor, ForeColor=ForeColor };
+        tabs.TabPages.Add(video);
+        var qualityTitle=MakeLabel("Resolution per eye",16,true);
+        qualityTitle.SetBounds(28,24,600,35);video.Controls.Add(qualityTitle);
+        var quality=new ComboBox { DropDownStyle=ComboBoxStyle.DropDownList };
+        quality.SetBounds(28,74,650,40);
+        quality.Items.AddRange(new object[]{"Smooth - 1280 x 1344 per eye", "Normal - 1680 x 1760 per eye", "Quest 3 panel resolution - 2064 x 2208 per eye"});
+        var modes=new[]{"smooth","normal","native"};
+        var qualityPath=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"QuestLink","stream-quality.txt");
+        var saved=File.Exists(qualityPath)?File.ReadAllText(qualityPath).Trim():"normal";
+        quality.SelectedIndex=Math.Max(0,Array.IndexOf(modes,saved));
+        quality.SelectedIndexChanged+=(_,_)=>{
+            try{Directory.CreateDirectory(Path.GetDirectoryName(qualityPath)!);File.WriteAllText(qualityPath,modes[quality.SelectedIndex]);status.Text="VR quality saved. Restart Gorilla Tag to apply.";}
+            catch(Exception ex){MessageBox.Show("Could not save VR quality: "+ex.Message,"QuestLink");}
+        };
+        video.Controls.Add(quality);
+        var qualityHint=MakeLabel("Restart Gorilla Tag after changing resolution. Higher settings need more GPU, encoder and Wi-Fi capacity. Use Smooth if Normal stutters. Requires Quest app 7.13-dev and runtime 0.5-dev.",11,false);
+        qualityHint.SetBounds(28,135,730,130);qualityHint.AutoSize=false;video.Controls.Add(qualityHint);
+
         Controls.Add(tabs);
 
         var title = MakeLabel("QuestLink PC V" + Version, 24, true);
@@ -872,7 +891,7 @@ public static class OpenCompositeManager
         if (!IsBundled())
             return new OpenCompositeInstallResult(
                 false,
-                "The OpenComposite compatibility files are missing. Extract the entire QuestLink PC v7.12-dev ZIP, including its opencomposite folder.");
+                "The OpenComposite compatibility files are missing. Extract the entire QuestLink PC v7.13-dev ZIP, including its opencomposite folder.");
 
         string? target = null;
         try

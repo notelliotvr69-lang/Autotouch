@@ -15,8 +15,8 @@ android {
         applicationId = "com.questtools.questlink"
         minSdk = 32
         targetSdk = 35
-        versionCode = 13
-        versionName = "7.12-dev"
+        versionCode = 14
+        versionName = "7.13-dev"
         ndk { abiFilters += "arm64-v8a" }
     }
 
