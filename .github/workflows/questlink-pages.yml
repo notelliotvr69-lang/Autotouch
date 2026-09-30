@@ -22,33 +22,33 @@ jobs:
         with:
           script: |
             const {data: run} = await github.rest.actions.getWorkflowRun({
-              owner: context.repo.owner, repo: context.repo.repo, run_id: 36518597444
+              owner: context.repo.owner, repo: context.repo.repo, run_id: 36653422410
             });
-            if (run.conclusion !== 'success' || run.head_sha !== '9a5fb4cf40cce1119a13ac15ac452bb55c7ff6d7') {
+            if (run.conclusion !== 'success' || run.head_sha !== '91990945e861c2991328b0cf76427a35b0668663') {
               throw new Error('Expected successful, pinned wireless test build');
             }
       - name: Download verified Quest APK
         uses: actions/download-artifact@v4
         with:
-          name: QuestLinkClient-v7.12-dev
-          run-id: 36518597444
+          name: QuestLinkClient-v7.13-dev
+          run-id: 36653422410
           github-token: ${{ github.token }}
           path: apk-download
       - name: Download matching runtime
         uses: actions/download-artifact@v4
         with:
-          name: QuestLinkRuntime-v0.4-dev
-          run-id: 36518597444
+          name: QuestLinkRuntime-v0.5-dev
+          run-id: 36653422410
           github-token: ${{ github.token }}
           path: runtime-download
       - name: Assemble public downloads
         shell: bash
         run: |
-          cp apk-download/app-debug.apk questlink-site/QuestLinkClient-v7.12-dev.apk
-          (cd runtime-download && zip -qr ../questlink-site/QuestLinkRuntime-v0.4-dev.zip .)
-          test -s questlink-site/QuestLinkClient-v7.12-dev.apk
-          test -s questlink-site/QuestLinkRuntime-v0.4-dev.zip
-          (cd questlink-site && sha256sum QuestLinkClient-v7.12-dev.apk QuestLinkRuntime-v0.4-dev.zip > SHA256SUMS.txt)
+          cp apk-download/app-debug.apk questlink-site/QuestLinkClient-v7.13-dev.apk
+          (cd runtime-download && zip -qr ../questlink-site/QuestLinkRuntime-v0.5-dev.zip .)
+          test -s questlink-site/QuestLinkClient-v7.13-dev.apk
+          test -s questlink-site/QuestLinkRuntime-v0.5-dev.zip
+          (cd questlink-site && sha256sum QuestLinkClient-v7.13-dev.apk QuestLinkRuntime-v0.5-dev.zip > SHA256SUMS.txt)
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4
         with:
