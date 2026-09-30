@@ -92,7 +92,7 @@ class H264Encoder {
                 }
                 if(!accepted)return fail("output format negotiation",hr);
                 // Async transforms signal a fresh HaveOutput event after format negotiation.
-                if(async)++haveOutput;
+
                 continue;
             }
             if(hr==MF_E_TRANSFORM_NEED_MORE_INPUT)return true;
@@ -167,3 +167,4 @@ public:
     }
 };
 }
+
