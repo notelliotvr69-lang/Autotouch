@@ -724,7 +724,7 @@ static XrResult XRAPI_CALL ql_xrGetInstanceProperties(
     if (!validInstance(instance)) return XR_ERROR_HANDLE_INVALID;
     if (!properties) return XR_ERROR_VALIDATION_FAILURE;
     properties->runtimeVersion = XR_MAKE_VERSION(0, 4, 0);
-    copyText(properties->runtimeName, "QuestLink OpenXR Runtime v0.5-dev");
+    copyText(properties->runtimeName, "QuestLink OpenXR Runtime v0.5.1-dev");
     return XR_SUCCESS;
 }
 
@@ -1599,7 +1599,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrNegotiateLoaderRuntimeInterface(
     runtimeRequest->runtimeApiVersion = XR_CURRENT_API_VERSION;
     runtimeRequest->getInstanceProcAddr = ql_xrGetInstanceProcAddr;
 
-    logLine("xrNegotiateLoaderRuntimeInterface: QuestLink v0.5-dev");
+    logLine("xrNegotiateLoaderRuntimeInterface: QuestLink v0.5.1-dev");
     return XR_SUCCESS;
 }
 

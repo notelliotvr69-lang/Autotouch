@@ -57,7 +57,7 @@ struct Stream {
         int fd=::socket(AF_INET,SOCK_STREAM,0);if(fd<0)return -1;
         fcntl(fd,F_SETFL,O_NONBLOCK);int result=connect(fd,reinterpret_cast<sockaddr*>(&addr),sizeof(addr));
         if(result!=0){pollfd p{fd,POLLOUT,0};int error=0;socklen_t n=sizeof(error);if(poll(&p,1,1000)<=0||getsockopt(fd,SOL_SOCKET,SO_ERROR,&error,&n)<0||error){close(fd);return -1;}}
-        fcntl(fd,F_SETFL,0);timeval timeout{2,0};setsockopt(fd,SOL_SOCKET,SO_RCVTIMEO,&timeout,sizeof(timeout));setsockopt(fd,SOL_SOCKET,SO_SNDTIMEO,&timeout,sizeof(timeout));int noDelay=1;setsockopt(fd,IPPROTO_TCP,TCP_NODELAY,&noDelay,sizeof(noDelay));return fd;
+        fcntl(fd,F_SETFL,0);timeval timeout{5,0};setsockopt(fd,SOL_SOCKET,SO_RCVTIMEO,&timeout,sizeof(timeout));setsockopt(fd,SOL_SOCKET,SO_SNDTIMEO,&timeout,sizeof(timeout));int noDelay=1;setsockopt(fd,IPPROTO_TCP,TCP_NODELAY,&noDelay,sizeof(noDelay));return fd;
     }
     void run(const std::string& host){
         while(!stop){int fd=-1;try{fd=connectHost(host);}catch(const std::exception& e){setStatus(e.what());return;}
@@ -97,7 +97,7 @@ struct Stream {
                         size_t capacity=0;auto* buffer=AMediaCodec_getInputBuffer(decoder,index,&capacity);if(!buffer||capacity<payload.size())throw std::runtime_error("Decoder input too large");
                         memcpy(buffer,payload.data(),payload.size());
                         if(AMediaCodec_queueInputBuffer(decoder,index,0,payload.size(),header.id,0)!=AMEDIA_OK)throw std::runtime_error("Decoder input rejected");
-                        auto deadline=Clock::now()+std::chrono::milliseconds(150);bool rendered=false;
+                        auto deadline=Clock::now()+std::chrono::milliseconds(500);bool rendered=false;
                         while(!stop&&Clock::now()<deadline){AMediaCodecBufferInfo info{};ssize_t output=AMediaCodec_dequeueOutputBuffer(decoder,&info,10000);
                             if(output>=0){AMediaCodec_releaseOutputBuffer(decoder,output,true);rendered=true;break;}
                             if(output==AMEDIACODEC_INFO_OUTPUT_FORMAT_CHANGED){auto* f=AMediaCodec_getOutputFormat(decoder);AMediaFormat_delete(f);}
@@ -223,7 +223,7 @@ struct Client {
     void frame(){
         XrFrameWaitInfo wait{XR_TYPE_FRAME_WAIT_INFO};XrFrameState state{XR_TYPE_FRAME_STATE};XR(xrWaitFrame(session,&wait,&state));XrFrameBeginInfo begin{XR_TYPE_FRAME_BEGIN_INFO};XR(xrBeginFrame(session,&begin));
         auto t=tracking(state.predictedDisplayTime);stream.publish(t);latch();
-        bool draw=state.shouldRender&&hasImage&&Clock::now()-shownTime<std::chrono::milliseconds(250)&&t.headFlags==ql::Tracked;
+        bool draw=state.shouldRender&&hasImage&&Clock::now()-shownTime<std::chrono::milliseconds(1000)&&t.headFlags==ql::Tracked;
         XrCompositionLayerProjectionView views[2]{{XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW},{XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW}};
         if(draw)resizeSwapchains(shown.width/2,shown.height);
         if(draw)for(int eye=0;eye<2;++eye){

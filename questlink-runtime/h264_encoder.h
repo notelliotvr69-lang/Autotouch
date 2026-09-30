@@ -10,6 +10,7 @@
 #include <thread>
 #include <vector>
 #include <string>
+#include <deque>
 
 namespace ql {
 // Output timestamps identify queued input frames; the caller bounds the pending queue.
@@ -62,6 +63,33 @@ class H264Encoder {
             MediaEventType type;event->GetType(&type);if(type==METransformNeedInput)++needInput;if(type==METransformHaveOutput)++haveOutput;
         }
     }
+    struct Encoded {uint64_t frame;std::vector<uint8_t> bytes;};
+    std::deque<Encoded> ready;
+    bool drainOutputs(){
+        for(int i=0;i<16;++i){
+            if(!pump())return false;
+            if(async&&haveOutput==0)return true;
+            MFT_OUTPUT_STREAM_INFO info{};if(FAILED(transform->GetOutputStreamInfo(0,&info)))return false;
+            Ptr<IMFSample> outSample;Ptr<IMFMediaBuffer> outBuffer;
+            if(!(info.dwFlags&MFT_OUTPUT_STREAM_PROVIDES_SAMPLES)){
+                if(FAILED(MFCreateSample(&outSample))||FAILED(MFCreateMemoryBuffer(std::max<DWORD>(info.cbSize,width*height*2),&outBuffer)))return false;
+                outSample->AddBuffer(outBuffer.Get());
+            }
+            MFT_OUTPUT_DATA_BUFFER data{};data.pSample=outSample.Get();DWORD status=0;
+            HRESULT hr=transform->ProcessOutput(0,1,&data,&status);if(async)--haveOutput;
+            if(data.pEvents)data.pEvents->Release();
+            if(hr==MF_E_TRANSFORM_NEED_MORE_INPUT)return true;
+            if(FAILED(hr))return fail("ProcessOutput",hr);
+            if(!outSample)outSample.Attach(data.pSample);
+            if(!outSample||FAILED(outSample->ConvertToContiguousBuffer(&outBuffer)))return false;
+            LONGLONG timestamp=0;if(FAILED(outSample->GetSampleTime(&timestamp))||timestamp<0)return fail("output timestamp",E_FAIL);
+            uint64_t completedFrame=static_cast<uint64_t>((timestamp*fps+5000000)/10000000);
+            DWORD size=0;if(FAILED(outBuffer->Lock(&bytes,nullptr,&size)))return false;
+            ready.push_back({completedFrame,std::vector<uint8_t>(bytes,bytes+size)});outBuffer->Unlock();
+            if(ready.size()>8)return fail("output queue exceeded",E_FAIL);
+        }
+        return true;
+    }
     static uint8_t clamp(int v){return uint8_t(v<0?0:v>255?255:v);}
 public:
     ~H264Encoder(){events.Reset();transform.Reset();if(mf)MFShutdown();if(com)CoUninitialize();}
@@ -98,30 +126,27 @@ public:
         memcpy(bytes,nv12.data(),nv12.size());buffer->Unlock();buffer->SetCurrentLength(static_cast<DWORD>(nv12.size()));sample->AddBuffer(buffer.Get());
         sample->SetSampleTime(static_cast<LONGLONG>(frame)*10000000/fps);sample->SetSampleDuration(10000000/fps);++index;
         auto deadline=std::chrono::steady_clock::now()+std::chrono::milliseconds(250);
-        while(async&&needInput==0){if(!pump())return false;if(std::chrono::steady_clock::now()>deadline)return fail("waiting for input",E_PENDING);std::this_thread::sleep_for(std::chrono::milliseconds(1));}
-        HRESULT inputResult=transform->ProcessInput(0,sample.Get(),0);if(FAILED(inputResult))return fail("ProcessInput",inputResult);if(async)--needInput;
-        deadline=std::chrono::steady_clock::now()+std::chrono::milliseconds(2);
-        for(;;){
-            if(!pump())return false;if(std::chrono::steady_clock::now()>deadline)return true; // Accepted input; hardware may output after subsequent frames.
-            if(async&&haveOutput==0){std::this_thread::sleep_for(std::chrono::milliseconds(1));continue;}
-            MFT_OUTPUT_STREAM_INFO info{};if(FAILED(transform->GetOutputStreamInfo(0,&info)))return false;
-            Ptr<IMFSample> outSample;Ptr<IMFMediaBuffer> outBuffer;
-            if(!(info.dwFlags&MFT_OUTPUT_STREAM_PROVIDES_SAMPLES)){
-                if(FAILED(MFCreateSample(&outSample))||FAILED(MFCreateMemoryBuffer(std::max<DWORD>(info.cbSize,width*height*2),&outBuffer)))return false;
-                outSample->AddBuffer(outBuffer.Get());
-            }
-            MFT_OUTPUT_DATA_BUFFER data{};data.pSample=outSample.Get();DWORD status=0;
-            HRESULT hr=transform->ProcessOutput(0,1,&data,&status);if(async)--haveOutput;
-            if(data.pEvents)data.pEvents->Release();
-            if(hr==MF_E_TRANSFORM_NEED_MORE_INPUT)return true; // Keep the input metadata until its output timestamp arrives.
-            if(FAILED(hr))return fail("ProcessOutput",hr);
-            if(!outSample)outSample.Attach(data.pSample);
-            if(!outSample||FAILED(outSample->ConvertToContiguousBuffer(&outBuffer)))return false;
-            LONGLONG timestamp=0;if(FAILED(outSample->GetSampleTime(&timestamp))||timestamp<0)return fail("output timestamp",E_FAIL);
-            outputFrame=static_cast<uint64_t>((timestamp*fps+5000000)/10000000);
-            DWORD size=0;if(FAILED(outBuffer->Lock(&bytes,nullptr,&size)))return false;
-            output.assign(bytes,bytes+size);outBuffer->Unlock();return !output.empty();
+        // Async MFTs may withhold NeedInput until their pending output is consumed.
+        // Always drain first, including when waiting for the next input slot.
+        if(!drainOutputs())return false;
+        while(async&&needInput==0){
+            if(!drainOutputs())return false;
+            if(needInput)break;
+            if(std::chrono::steady_clock::now()>deadline)return fail("waiting for input",E_PENDING);
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
+        HRESULT inputResult=transform->ProcessInput(0,sample.Get(),0);
+        if(inputResult==MF_E_NOTACCEPTING){
+            if(!drainOutputs())return false;
+            inputResult=transform->ProcessInput(0,sample.Get(),0);
+        }
+        if(FAILED(inputResult))return fail("ProcessInput",inputResult);
+        if(async)--needInput;
+        if(!drainOutputs())return false;
+        if(!ready.empty()){
+            outputFrame=ready.front().frame;output=std::move(ready.front().bytes);ready.pop_front();
+        }
+        return true;
     }
 };
 }

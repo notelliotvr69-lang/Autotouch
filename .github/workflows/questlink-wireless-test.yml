@@ -25,7 +25,7 @@ jobs:
           Copy-Item questlink-runtime/WIRELESS-TESTING.md dist/runtime/
       - uses: actions/upload-artifact@v4
         with:
-          name: QuestLinkRuntime-v0.5-dev
+          name: QuestLinkRuntime-v0.5.1-dev
           path: dist/runtime/
       - uses: actions/upload-artifact@v4
         with:
@@ -49,5 +49,5 @@ jobs:
         working-directory: questlink-android
       - uses: actions/upload-artifact@v4
         with:
-          name: QuestLinkClient-v7.13-dev
+          name: QuestLinkClient-v7.14-dev
           path: questlink-android/app/build/outputs/apk/debug/app-debug.apk
