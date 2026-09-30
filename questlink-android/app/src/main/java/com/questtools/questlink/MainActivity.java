@@ -31,7 +31,7 @@ import java.util.*;
 public class MainActivity extends Activity implements SensorEventListener {
     private static final int PORT = 47990;
     private static final int STREAM_PORT = 47991;
-    private static final String VERSION = "7.11";
+    private static final String VERSION = "7.14-dev";
 
     private static final int BG = Color.rgb(9, 11, 17);
     private static final int PANEL = Color.rgb(20, 23, 34);
@@ -324,7 +324,7 @@ public class MainActivity extends Activity implements SensorEventListener {
         gtagPanel.addView(gtagModsBox);
 
         addSpace(gtagPanel, 14);
-        streamButton = actionButton("Connect to Running QuestLink Stream", false);
+        streamButton = actionButton("Enter Wireless VR", false);
         streamButton.setEnabled(false);
         streamButton.setOnClickListener(v -> startStreamPreviewWithRetry(1));
         gtagPanel.addView(streamButton, new LinearLayout.LayoutParams(
@@ -399,7 +399,7 @@ public class MainActivity extends Activity implements SensorEventListener {
         addSpace(root, 18);
 
         TextView bridge = muted(
-                "V7.11 supports the Gorilla Tag SteamVR/OpenVR path: live QuestLink stream preview plus Quest orientation return. This is still a bridge test build, not final low-latency immersive VR yet.",
+                "Experimental wireless VR: immersive OpenXR display and Touch tracking. Requires the v0.4 runtime. Headset testing is still required.",
                 12);
         bridge.setGravity(Gravity.CENTER);
         root.addView(bridge);
@@ -681,7 +681,7 @@ public class MainActivity extends Activity implements SensorEventListener {
                 loadRuntimeStatus();
                 loadGtagMods();
 
-                // The stream server starts when SteamVR loads the QuestLink OpenVR driver.
+                // The stream server starts when the game opens the QuestLink OpenXR runtime.
                 // Retry so the user does not need to time the connection manually.
                 startStreamPreviewWithRetry(30);
             });
@@ -691,60 +691,11 @@ public class MainActivity extends Activity implements SensorEventListener {
     }
 
     private void startStreamPreviewWithRetry(int maxAttempts) {
-        if (streamRunning) return;
-        if (ip().isEmpty()) {
-            status.setText("Connect to the PC first.");
-            return;
-        }
-
-        streamRunning = true;
-        streamOverlay.setVisibility(View.VISIBLE);
-        streamStatus.setText("Waiting for Gorilla Tag / runtime stream on port " + STREAM_PORT + "...");
-        streamView.setImageDrawable(null);
-
-        streamThread = new Thread(() -> {
-            Exception lastError = null;
-
-            for (int attempt = 1; attempt <= Math.max(1, maxAttempts) && streamRunning; attempt++) {
-                try {
-                    Socket socket = new Socket();
-                    socket.setTcpNoDelay(true);
-                    socket.connect(new InetSocketAddress(ip(), STREAM_PORT), 1500);
-                    socket.setSoTimeout(15000);
-
-                    streamSocket = socket;
-                    streamOut = new DataOutputStream(new BufferedOutputStream(socket.getOutputStream()));
-
-                    ui.post(() -> {
-                        streamStatus.setText("LIVE • QuestLink stereo bridge");
-                        startPoseTracking();
-                    });
-
-                    readStreamLoop(socket);
-                    lastError = null;
-                    break;
-                } catch (Exception ex) {
-                    lastError = ex;
-                    closeStreamSocketOnly();
-
-                    final int a = attempt;
-                    ui.post(() -> streamStatus.setText(
-                            "Waiting for runtime stream... attempt " + a + "/" + Math.max(1, maxAttempts)));
-
-                    if (!streamRunning) break;
-                    try { Thread.sleep(1000); } catch (InterruptedException ignored) {}
-                }
-            }
-
-            if (streamRunning && lastError != null) {
-                String message = lastError.getMessage() == null
-                        ? lastError.getClass().getSimpleName()
-                        : lastError.getMessage();
-                ui.post(() -> streamStatus.setText("Stream connection failed: " + message));
-            }
-        }, "QuestLinkStream");
-
-        streamThread.start();
+        if (ip().isEmpty()) { status.setText("Connect to the PC first."); return; }
+        stopStreamPreview();
+        android.content.Intent intent = new android.content.Intent(this, VrActivity.class);
+        intent.putExtra("host", ip());
+        startActivity(intent);
     }
 
     private void readStreamLoop(Socket socket) throws IOException {

@@ -23,7 +23,7 @@ internal static class Program
 public sealed class MainForm : Form
 {
     private const int Port = 47990;
-    private const string Version = "7.11";
+    private const string Version = "7.13-dev";
 
     private readonly Label status = new();
     private readonly Label lanStatus = new();
@@ -88,6 +88,25 @@ public sealed class MainForm : Form
         tabs.TabPages.Add(library);
         tabs.TabPages.Add(steamvr);
         tabs.TabPages.Add(mods);
+        var video = new TabPage("VR Quality") { BackColor=BackColor, ForeColor=ForeColor };
+        tabs.TabPages.Add(video);
+        var qualityTitle=MakeLabel("Resolution per eye",16,true);
+        qualityTitle.SetBounds(28,24,600,35);video.Controls.Add(qualityTitle);
+        var quality=new ComboBox { DropDownStyle=ComboBoxStyle.DropDownList };
+        quality.SetBounds(28,74,650,40);
+        quality.Items.AddRange(new object[]{"Smooth - 1280 x 1344 per eye", "Normal - 1680 x 1760 per eye", "Quest 3 panel resolution - 2064 x 2208 per eye"});
+        var modes=new[]{"smooth","normal","native"};
+        var qualityPath=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"QuestLink","stream-quality.txt");
+        var saved=File.Exists(qualityPath)?File.ReadAllText(qualityPath).Trim():"normal";
+        quality.SelectedIndex=Math.Max(0,Array.IndexOf(modes,saved));
+        quality.SelectedIndexChanged+=(_,_)=>{
+            try{Directory.CreateDirectory(Path.GetDirectoryName(qualityPath)!);File.WriteAllText(qualityPath,modes[quality.SelectedIndex]);status.Text="VR quality saved. Restart Gorilla Tag to apply.";}
+            catch(Exception ex){MessageBox.Show("Could not save VR quality: "+ex.Message,"QuestLink");}
+        };
+        video.Controls.Add(quality);
+        var qualityHint=MakeLabel("Restart Gorilla Tag after changing resolution. Higher settings need more GPU, encoder and Wi-Fi capacity. Use Smooth if Normal stutters. Requires Quest app 7.13-dev and runtime 0.5-dev.",11,false);
+        qualityHint.SetBounds(28,135,730,130);qualityHint.AutoSize=false;video.Controls.Add(qualityHint);
+
         Controls.Add(tabs);
 
         var title = MakeLabel("QuestLink PC V" + Version, 24, true);
@@ -329,7 +348,7 @@ public sealed class MainForm : Form
             return;
         }
 
-        status.Text = "Preparing QuestLink OpenVR driver and SteamVR...";
+        status.Text = "Preparing OpenComposite and QuestLink...";
         var result = await Launcher.LaunchGameAsync(game);
         status.Text = result.Message;
         RefreshRuntimeStatus();
@@ -718,17 +737,28 @@ public static class Launcher
 
             try
             {
-                Process.Start(new ProcessStartInfo
+                using var process = Process.Start(new ProcessStartInfo
                 {
                     FileName = exe,
-                    Arguments = "-vrmode openvr",
+                    Arguments = "-vrmode openvr -force-d3d11",
                     WorkingDirectory = Path.GetDirectoryName(exe)!,
                     UseShellExecute = true
                 });
 
+                if (process is null)
+                    return new LaunchResult(false, "Windows did not start Gorilla Tag.");
+
+                // Do not send the headset into VR when the game immediately crashes.
+                var exit = process.WaitForExitAsync();
+                if (await Task.WhenAny(exit, Task.Delay(8000)) == exit || process.HasExited)
+                    return new LaunchResult(false,
+                        $"Gorilla Tag exited during startup (code {process.ExitCode}). " +
+                        "Check Player.log in AppData/LocalLow/Another Axiom/Gorilla Tag and " +
+                        "AppData/Local/OpenComposite/logs/opencomposite.log.");
+
                 return new LaunchResult(
                     true,
-                    "Launching Gorilla Tag through OpenComposite -> QuestLink OpenXR. SteamVR is not used.");
+                    "Gorilla Tag is running through OpenComposite. Connect the Quest client to test VR.");
             }
             catch (Exception ex)
             {
@@ -851,14 +881,17 @@ public static class OpenCompositeManager
     private static string BundledDll =>
         Path.Combine(AppContext.BaseDirectory, "opencomposite", "openvr_api.dll");
 
-    public static bool IsBundled() => File.Exists(BundledDll);
+    private static string BundledBackend =>
+        Path.Combine(AppContext.BaseDirectory, "opencomposite", "opencomposite_backend.dll");
+
+    public static bool IsBundled() => File.Exists(BundledDll) && File.Exists(BundledBackend);
 
     public static OpenCompositeInstallResult InstallForGame(string gameRoot)
     {
-        if (!File.Exists(BundledDll))
+        if (!IsBundled())
             return new OpenCompositeInstallResult(
                 false,
-                "OpenComposite is missing from the QuestLink PC package. Download QuestLink PC v7.11.");
+                "The OpenComposite compatibility files are missing. Extract the entire QuestLink PC v7.13-dev ZIP, including its opencomposite folder.");
 
         string? target = null;
         try
@@ -897,6 +930,9 @@ public static class OpenCompositeManager
             if (!File.Exists(backup))
                 File.Copy(target, backup, overwrite: false);
 
+            // Stage the backend before the forwarding DLL so every export can resolve.
+            File.Copy(BundledBackend,
+                Path.Combine(Path.GetDirectoryName(target)!, "opencomposite_backend.dll"), overwrite: true);
             File.Copy(BundledDll, target, overwrite: true);
 
             var ini = Path.Combine(Path.GetDirectoryName(target)!, "opencomposite.ini");
