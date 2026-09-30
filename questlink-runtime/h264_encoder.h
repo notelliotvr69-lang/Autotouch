@@ -91,7 +91,7 @@ class H264Encoder {
                     if(SUCCEEDED(transform->SetOutputType(0,type.Get(),0))){accepted=true;break;}
                 }
                 if(!accepted)return fail("output format negotiation",hr);
-                // No sample was consumed; retry the pending output in its new format.
+                // Async transforms signal a fresh HaveOutput event after format negotiation.
                 if(async)++haveOutput;
                 continue;
             }
