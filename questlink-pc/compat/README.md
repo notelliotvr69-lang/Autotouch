@@ -12,7 +12,8 @@ https://github.com/ValveSoftware/unity-xr-plugin/blob/master/Providers/Display/D
 The SteamVR desktop mirror is unavailable. This does not implement a replacement
 headset, compositor, or controller API; those still come from OpenComposite.
 
-Build with MSVC: cl /LD /O2 compat.c /link /DEF:openvr_api.def /OUT:openvr_api.dll
+Build with Zig 0.16.0 (python package ziglang):
+python -m ziglang cc -target x86_64-windows-gnu -shared -nostdlib -O2 -DQUESTLINK_NO_CRT compat.c openvr_api.def -o openvr_api.dll
 The backend is pinned to SHA256
 827ad85f3606a4dc4a8f5561a8ca69e4c6c1b5d2b9cd3315a461b9270b08242c.
 Run: python test_exports.py <directory-containing-both-dlls>
