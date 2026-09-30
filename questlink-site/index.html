@@ -146,13 +146,14 @@
         <span class="pill">QuestLink OpenXR runtime</span>
       </div>
 
+      <p><strong>New experimental build:</strong> download both the updated Quest APK and Runtime V0.4-dev. The old V0.3 runtime does not work with this APK.</p>
       <div class="downloads">
-        <a class="download primary" href="https://github.com/notelliotvr69-lang/Autotouch/releases/download/questlink-quest-v7.11/QuestLinkClient-v7.11.apk">
+        <a class="download primary" href="./QuestLinkClient-v7.12-dev.apk">
           <div>
             <h2>Quest App</h2>
-            <p>Quest V7.11 headset client with PC connection, PCVR library, GTAG plugin details, live stereo bridge preview, and Quest orientation return.</p>
+            <p>Quest V7.12-dev Wi-Fi test client with immersive OpenXR rendering, head tracking, Touch controller inputs, and H.264 decoding. Requires Runtime V0.4-dev below.</p>
           </div>
-          <span class="button">Download APK</span>
+          <span class="button">Download APK � V7.12-dev</span>
         </a>
 
         <a class="download" href="https://github.com/notelliotvr69-lang/Autotouch/releases/download/questlink-pc-v7.11/QuestLinkPC-v7.11.zip">
@@ -163,10 +164,10 @@
           <span class="button">Download PC ZIP</span>
         </a>
 
-        <a class="download" href="https://github.com/notelliotvr69-lang/Autotouch/releases/download/questlink-runtime-v0.3/QuestLinkRuntime-Windows-x64-v0.3.zip">
+        <a class="download" href="./QuestLinkRuntime-v0.4-dev.zip">
           <div>
             <h2>OpenXR Runtime</h2>
-            <p>QuestLink Runtime V0.3 with D3D11 OpenXR sessions plus the first PC-to-Quest stereo frame bridge on TCP 47991.</p>
+            <p>Runtime V0.4-dev for the new Quest client: tracked input and H.264 streaming with software fallback. Download and activate this matching runtime on your PC.</p>
           </div>
           <span class="button">Download Runtime ZIP</span>
         </a>
@@ -176,9 +177,9 @@
     <section>
       <h2>Current flow</h2>
       <ol>
-        <li>Install and activate the QuestLink OpenXR runtime on the PC.</li>
+        <li>Extract Runtime V0.4-dev into a new folder and run INSTALL_QUESTLINK_RUNTIME.bat on the PC.</li>
         <li>Run QuestLink PC V7.11 and note the LAN IP it shows.</li>
-        <li>Install/open Quest V7.11 and enter that PC IP.</li>
+        <li>Install/open Quest V7.12-dev and enter that PC IP. Keep the Quest and PC on the same Wi-Fi LAN.</li>
         <li>The Quest launcher loads runtime status, PCVR games, and Gorilla Tag mod/plugin details.</li>
         <li>Launch Gorilla Tag with QuestLink. PC V7.11 swaps GTAG to the bundled OpenComposite bridge, then starts it with <code>-vrmode openvr</code>. SteamVR is not started.</li>
       </ol>
@@ -194,9 +195,10 @@
     <section>
       <h2>Heads up</h2>
       <p class="small">
-        QuestLink is still a prototype. The no-SteamVR GTAG bridge is now packaged, but full low-latency immersive streaming, controller tracking, hardware H.264/H.265 encoding, and final compositor integration are not finished yet.
+        This is a development test, not a confirmed playable release. Audio is not implemented. Controller vibration is optional and not included. Wi-Fi latency, image orientation, tracking alignment, and GTAG gameplay need a headset test. If Android reports a signing-key conflict, replacing the old APK may require uninstalling it first, which clears its saved settings.
       </p>
     </section>
+  <p class="small"><a href="./SHA256SUMS.txt" style="color:#b8a7ff">Download checksums</a> � <a href="https://github.com/notelliotvr69-lang/Autotouch/pull/5" style="color:#b8a7ff">Development source and test notes</a></p>
   </main>
 </body>
 </html>

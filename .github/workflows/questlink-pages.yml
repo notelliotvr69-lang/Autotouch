@@ -1,124 +1,58 @@
 name: Deploy QuestLink
-
 on:
   push:
-    branches: [ main ]
-    paths:
-      - 'questlink-android/**'
-      - 'questlink-pc/**'
-      - 'questlink-runtime/**'
-      - 'questlink-site/**'
-      - '.github/workflows/questlink-pages.yml'
+    branches: [main]
+    paths: ['questlink-site/**', '.github/workflows/questlink-pages.yml']
   workflow_dispatch:
-
 permissions:
   contents: read
+  actions: read
   pages: write
   id-token: write
-
 concurrency:
   group: questlink-pages
   cancel-in-progress: true
-
 jobs:
-  build-runtime:
-    runs-on: windows-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Configure runtime
-        shell: pwsh
-        run: cmake -S questlink-runtime -B build/questlink-runtime -A x64
-
-      - name: Build runtime
-        shell: pwsh
-        run: cmake --build build/questlink-runtime --config Release --parallel
-
-      - name: Package runtime
-        shell: pwsh
-        run: |
-          $stage = "dist/QuestLinkRuntime-Windows-x64"
-          New-Item -ItemType Directory -Force -Path $stage | Out-Null
-          New-Item -ItemType Directory -Force -Path "$stage/tools" | Out-Null
-
-          Copy-Item "build/questlink-runtime/Release/QuestLinkOpenXRRuntime.dll" "$stage/QuestLinkOpenXRRuntime.dll"
-          Copy-Item "questlink-runtime/questlink_runtime.json" "$stage/questlink_runtime.json"
-          Copy-Item "questlink-runtime/INSTALL_QUESTLINK_RUNTIME.bat" "$stage/INSTALL_QUESTLINK_RUNTIME.bat"
-          Copy-Item "questlink-runtime/RESTORE_PREVIOUS_RUNTIME.bat" "$stage/RESTORE_PREVIOUS_RUNTIME.bat"
-          Copy-Item "questlink-runtime/RUNTIME_STATUS.bat" "$stage/RUNTIME_STATUS.bat"
-          Copy-Item "questlink-runtime/README.txt" "$stage/README.txt"
-          Copy-Item "questlink-runtime/tools/Install-QuestLinkRuntime.ps1" "$stage/tools/Install-QuestLinkRuntime.ps1"
-          Copy-Item "questlink-runtime/tools/Restore-PreviousRuntime.ps1" "$stage/tools/Restore-PreviousRuntime.ps1"
-
-          Compress-Archive -Path "$stage/*" -DestinationPath "dist/QuestLinkRuntime-Windows-x64-v0.3.zip" -Force
-
-      - name: Upload runtime package
-        uses: actions/upload-artifact@v4
-        with:
-          name: QuestLinkRuntime-Web
-          path: dist/QuestLinkRuntime-Windows-x64-v0.3.zip
-          if-no-files-found: error
-          compression-level: 0
-
   build:
     runs-on: ubuntu-latest
-    needs: build-runtime
-    timeout-minutes: 30
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
+      - uses: actions/checkout@v4
+      - name: Verify development build provenance
+        uses: actions/github-script@v7
         with:
-          distribution: temurin
-          java-version: '17'
-
-      - name: Set up Gradle 8.9
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.9'
-
-      - name: Install Android SDK packages
-        shell: bash
-        run: |
-          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
-          if [ ! -x "$SDKMANAGER" ]; then
-            SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | head -n 1)"
-          fi
-          test -x "$SDKMANAGER"
-          yes | "$SDKMANAGER" --licenses >/dev/null || true
-          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0"
-
-      - name: Build Quest APK
-        working-directory: questlink-android
-        run: gradle --no-daemon clean assembleDebug
-
-      - name: Download runtime package
+          script: |
+            const {data: run} = await github.rest.actions.getWorkflowRun({
+              owner: context.repo.owner, repo: context.repo.repo, run_id: 36518597444
+            });
+            if (run.conclusion !== 'success' || run.head_sha !== '9a5fb4cf40cce1119a13ac15ac452bb55c7ff6d7') {
+              throw new Error('Expected successful, pinned wireless test build');
+            }
+      - name: Download verified Quest APK
         uses: actions/download-artifact@v4
         with:
-          name: QuestLinkRuntime-Web
+          name: QuestLinkClient-v7.12-dev
+          run-id: 36518597444
+          github-token: ${{ github.token }}
+          path: apk-download
+      - name: Download matching runtime
+        uses: actions/download-artifact@v4
+        with:
+          name: QuestLinkRuntime-v0.4-dev
+          run-id: 36518597444
+          github-token: ${{ github.token }}
           path: runtime-download
-
-      - name: Assemble website downloads
+      - name: Assemble public downloads
         shell: bash
         run: |
-          cp questlink-android/app/build/outputs/apk/debug/app-debug.apk questlink-site/QuestLinkClient-v7.11.apk
-          cp runtime-download/QuestLinkRuntime-Windows-x64-v0.3.zip questlink-site/QuestLinkRuntime-Windows-x64-v0.3.zip
-
-          test -f questlink-site/QuestLinkClient-v7.11.apk
-          test -f questlink-site/QuestLinkRuntime-Windows-x64-v0.3.zip
-          ls -lh questlink-site/QuestLinkClient-v7.11.apk questlink-site/QuestLinkRuntime-Windows-x64-v0.3.zip
-
-      - name: Configure Pages
-        uses: actions/configure-pages@v5
-
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v4
+          cp apk-download/app-debug.apk questlink-site/QuestLinkClient-v7.12-dev.apk
+          (cd runtime-download && zip -qr ../questlink-site/QuestLinkRuntime-v0.4-dev.zip .)
+          test -s questlink-site/QuestLinkClient-v7.12-dev.apk
+          test -s questlink-site/QuestLinkRuntime-v0.4-dev.zip
+          (cd questlink-site && sha256sum QuestLinkClient-v7.12-dev.apk QuestLinkRuntime-v0.4-dev.zip > SHA256SUMS.txt)
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
         with:
           path: questlink-site
-
   deploy:
     environment:
       name: github-pages
