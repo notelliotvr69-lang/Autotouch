@@ -428,25 +428,20 @@ bool copyProjectionEye(
 
     const uint32_t destXBase = eyeIndex * kEyeStreamWidth;
 
-    for (uint32_t y = 0; y < kEyeStreamHeight; ++y) {
-        const uint32_t sy = std::min<uint32_t>(copyH - 1, static_cast<uint32_t>((static_cast<uint64_t>(y) * copyH) / kEyeStreamHeight));
-        const uint8_t* srcRow = static_cast<const uint8_t*>(mapped.pData) + static_cast<size_t>(sy) * mapped.RowPitch;
-
-        for (uint32_t x = 0; x < kEyeStreamWidth; ++x) {
-            const uint32_t sx = std::min<uint32_t>(copyW - 1, static_cast<uint32_t>((static_cast<uint64_t>(x) * copyW) / kEyeStreamWidth));
-            const uint8_t* px = srcRow + static_cast<size_t>(sx) * 4;
-
-            const size_t di = (static_cast<size_t>(y) * (kEyeStreamWidth * 2) + destXBase + x) * 4;
-            if (srcDesc.Format == DXGI_FORMAT_B8G8R8A8_UNORM) {
-                target[di + 0] = px[0];
-                target[di + 1] = px[1];
-                target[di + 2] = px[2];
-            } else {
-                target[di + 0] = px[2];
-                target[di + 1] = px[1];
-                target[di + 2] = px[0];
-            }
-            target[di + 3] = 255;
+    // Resolve horizontal scaling once per column instead of dividing for every pixel.
+    std::vector<uint32_t> columns(kEyeStreamWidth);
+    for(uint32_t x=0;x<kEyeStreamWidth;++x)
+        columns[x]=static_cast<uint32_t>((static_cast<uint64_t>(x)*copyW)/kEyeStreamWidth);
+    const bool bgra=srcDesc.Format==DXGI_FORMAT_B8G8R8A8_UNORM;
+    for(uint32_t y=0;y<kEyeStreamHeight;++y){
+        const uint32_t sy=static_cast<uint32_t>((static_cast<uint64_t>(y)*copyH)/kEyeStreamHeight);
+        const uint8_t* srcRow=static_cast<const uint8_t*>(mapped.pData)+static_cast<size_t>(sy)*mapped.RowPitch;
+        uint8_t* dstRow=target.data()+(static_cast<size_t>(y)*kEyeStreamWidth*2+destXBase)*4;
+        for(uint32_t x=0;x<kEyeStreamWidth;++x){
+            uint32_t pixel;memcpy(&pixel,srcRow+static_cast<size_t>(columns[x])*4,4);
+            if(!bgra)pixel=(pixel&0xff00ff00u)|((pixel&0xffu)<<16)|((pixel>>16)&0xffu);
+            pixel|=0xff000000u;
+            memcpy(dstRow+static_cast<size_t>(x)*4,&pixel,4);
         }
     }
 
@@ -597,7 +592,7 @@ void bridgeServerLoop() {
                 if (!g_bridgeRunning || !alive.load()) break;
                 if (g_latestFrameVersion <= lastVersion) continue;
 
-                frame = g_latestFrame;
+                frame = std::move(g_latestFrame);
                 lastVersion = g_latestFrameVersion;
             }
 
@@ -724,7 +719,7 @@ static XrResult XRAPI_CALL ql_xrGetInstanceProperties(
     if (!validInstance(instance)) return XR_ERROR_HANDLE_INVALID;
     if (!properties) return XR_ERROR_VALIDATION_FAILURE;
     properties->runtimeVersion = XR_MAKE_VERSION(0, 4, 0);
-    copyText(properties->runtimeName, "QuestLink OpenXR Runtime v0.5.1-dev");
+    copyText(properties->runtimeName, "QuestLink OpenXR Runtime v0.5.2-dev");
     return XR_SUCCESS;
 }
 
@@ -1599,7 +1594,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrNegotiateLoaderRuntimeInterface(
     runtimeRequest->runtimeApiVersion = XR_CURRENT_API_VERSION;
     runtimeRequest->getInstanceProcAddr = ql_xrGetInstanceProcAddr;
 
-    logLine("xrNegotiateLoaderRuntimeInterface: QuestLink v0.5.1-dev");
+    logLine("xrNegotiateLoaderRuntimeInterface: QuestLink v0.5.2-dev");
     return XR_SUCCESS;
 }
 

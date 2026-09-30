@@ -25,7 +25,7 @@ jobs:
           Copy-Item questlink-runtime/WIRELESS-TESTING.md dist/runtime/
       - uses: actions/upload-artifact@v4
         with:
-          name: QuestLinkRuntime-v0.5.1-dev
+          name: QuestLinkRuntime-v0.5.2-dev
           path: dist/runtime/
       - uses: actions/upload-artifact@v4
         with:
