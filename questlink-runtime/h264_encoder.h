@@ -12,7 +12,7 @@
 #include <string>
 
 namespace ql {
-// One submitted frame -> one access unit; no B frames or accumulated video queue.
+// Output timestamps identify queued input frames; the caller bounds the pending queue.
 // CPU NV12 upload is intentional for this first integration; zero-copy is future work.
 class H264Encoder {
     template<class T> using Ptr=Microsoft::WRL::ComPtr<T>;
@@ -20,6 +20,7 @@ class H264Encoder {
     Ptr<IMFMediaEventGenerator> events;
     uint32_t width=0,height=0,fps=72,bitrate=36000000;
     LONGLONG index=0;
+    uint64_t outputFrame=0;
     bool com=false,mf=false,async=false;
     bool hardwareSelected=false;
     std::string failure;
@@ -65,6 +66,7 @@ class H264Encoder {
 public:
     ~H264Encoder(){events.Reset();transform.Reset();if(mf)MFShutdown();if(com)CoUninitialize();}
     const std::string& error() const {return failure;}
+    uint64_t frameId() const {return outputFrame;}
     bool hardware() const { return hardwareSelected; }
     bool open(uint32_t w,uint32_t h,uint32_t rate,uint32_t bitsPerSecond,bool allowHardware=true) {
         width=w;height=h;fps=rate;bitrate=bitsPerSecond;
@@ -84,7 +86,8 @@ public:
         }
         transform.Reset();return false;
     }
-    bool encode(const std::vector<uint8_t>& bgra,std::vector<uint8_t>& output) {
+    bool encode(const std::vector<uint8_t>& bgra,std::vector<uint8_t>& output,uint64_t frame=0) {
+        output.clear();
         if(!transform||bgra.size()!=size_t(width)*height*4)return false;
         // BT.601 limited-range NV12, averaging chroma across each 2x2 block.
         for(uint32_t y=0;y<height;++y)for(uint32_t x=0;x<width;++x){auto p=&bgra[(size_t(y)*width+x)*4];nv12[size_t(y)*width+x]=clamp(((66*p[2]+129*p[1]+25*p[0]+128)>>8)+16);}
@@ -93,12 +96,13 @@ public:
         if(FAILED(MFCreateSample(&sample))||FAILED(MFCreateMemoryBuffer(static_cast<DWORD>(nv12.size()),&buffer)))return false;
         BYTE* bytes=nullptr;if(FAILED(buffer->Lock(&bytes,nullptr,nullptr)))return false;
         memcpy(bytes,nv12.data(),nv12.size());buffer->Unlock();buffer->SetCurrentLength(static_cast<DWORD>(nv12.size()));sample->AddBuffer(buffer.Get());
-        sample->SetSampleTime(index*10000000/fps);sample->SetSampleDuration(10000000/fps);++index;
+        sample->SetSampleTime(static_cast<LONGLONG>(frame)*10000000/fps);sample->SetSampleDuration(10000000/fps);++index;
         auto deadline=std::chrono::steady_clock::now()+std::chrono::milliseconds(250);
         while(async&&needInput==0){if(!pump())return false;if(std::chrono::steady_clock::now()>deadline)return fail("waiting for input",E_PENDING);std::this_thread::sleep_for(std::chrono::milliseconds(1));}
         HRESULT inputResult=transform->ProcessInput(0,sample.Get(),0);if(FAILED(inputResult))return fail("ProcessInput",inputResult);if(async)--needInput;
+        deadline=std::chrono::steady_clock::now()+std::chrono::milliseconds(2);
         for(;;){
-            if(!pump())return false;if(std::chrono::steady_clock::now()>deadline)return fail("waiting for output",E_PENDING);
+            if(!pump())return false;if(std::chrono::steady_clock::now()>deadline)return true; // Accepted input; hardware may output after subsequent frames.
             if(async&&haveOutput==0){std::this_thread::sleep_for(std::chrono::milliseconds(1));continue;}
             MFT_OUTPUT_STREAM_INFO info{};if(FAILED(transform->GetOutputStreamInfo(0,&info)))return false;
             Ptr<IMFSample> outSample;Ptr<IMFMediaBuffer> outBuffer;
@@ -109,10 +113,12 @@ public:
             MFT_OUTPUT_DATA_BUFFER data{};data.pSample=outSample.Get();DWORD status=0;
             HRESULT hr=transform->ProcessOutput(0,1,&data,&status);if(async)--haveOutput;
             if(data.pEvents)data.pEvents->Release();
-            if(hr==MF_E_TRANSFORM_NEED_MORE_INPUT)return fail("encoder requested another frame",hr); // Encoder buffering violates this transport's pose association.
+            if(hr==MF_E_TRANSFORM_NEED_MORE_INPUT)return true; // Keep the input metadata until its output timestamp arrives.
             if(FAILED(hr))return fail("ProcessOutput",hr);
             if(!outSample)outSample.Attach(data.pSample);
             if(!outSample||FAILED(outSample->ConvertToContiguousBuffer(&outBuffer)))return false;
+            LONGLONG timestamp=0;if(FAILED(outSample->GetSampleTime(&timestamp))||timestamp<0)return fail("output timestamp",E_FAIL);
+            outputFrame=static_cast<uint64_t>((timestamp*fps+5000000)/10000000);
             DWORD size=0;if(FAILED(outBuffer->Lock(&bytes,nullptr,&size)))return false;
             output.assign(bytes,bytes+size);outBuffer->Unlock();return !output.empty();
         }

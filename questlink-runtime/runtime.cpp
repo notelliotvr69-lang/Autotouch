@@ -582,6 +582,7 @@ void bridgeServerLoop() {
         logLine(h264?(encoder.hardware()?"Video encoder: hardware H264":"Video encoder: software H264"):"Video encoder unavailable: JPEG fallback");
         std::atomic<bool> alive{true};
         std::thread receiver(receiveHeadPoseLoop, client, std::ref(alive));
+        std::map<uint64_t,std::array<ql::Eye,2>> pendingPoses;
         uint64_t lastVersion;
         {std::lock_guard<std::mutex> lock(g_streamMutex);lastVersion=g_latestFrameVersion;}
 
@@ -601,7 +602,17 @@ void bridgeServerLoop() {
             }
 
             std::vector<uint8_t> encoded;
-            bool encodedOk=h264?encoder.encode(frame.bgra,encoded):encodeJpeg(frame,encoded);
+            if(h264)pendingPoses[frame.id]=frame.eyes;
+            bool encodedOk=h264?encoder.encode(frame.bgra,encoded,frame.id):encodeJpeg(frame,encoded);
+            if(h264&&encodedOk&&encoded.empty()){
+                if(pendingPoses.size()<=8)continue;
+                logLine("Encoder buffered more than 8 frames; using fallback");encodedOk=false;
+            }
+            if(h264&&encodedOk){
+                auto pose=pendingPoses.find(encoder.frameId());
+                if(pose==pendingPoses.end()){logLine("Encoder returned an unmatched frame timestamp");encodedOk=false;}
+                else{frame.id=pose->first;frame.eyes=pose->second;pendingPoses.erase(pendingPoses.begin(),std::next(pose));}
+            }
             if(!encodedOk){
                 logLine("Video encoding failed; reconnecting with fallback encoder: "+encoder.error());
                 if(h264&&encoder.hardware())allowHardware=false;else if(h264)allowH264=false;

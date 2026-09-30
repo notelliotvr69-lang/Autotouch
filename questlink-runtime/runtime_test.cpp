@@ -54,7 +54,14 @@ int main(){
         std::cout<<(encoder.hardware()?"Testing hardware H264":"Testing software H264")<<std::endl;
         std::vector<uint8_t> pixels(3360*1760*4,128),encoded;
         auto start=std::chrono::steady_clock::now();bool ok=true;
-        for(int frame=0;frame<8;++frame){if(!encoder.encode(pixels,encoded)||encoded.size()<8||encoded[0]!=0||encoded[1]!=0||(encoded[2]!=1&&(encoded[2]!=0||encoded[3]!=1))){ok=false;break;}}
+        int produced=0;uint64_t previous=0;
+        for(uint64_t frame=1;frame<=32&&produced<8;++frame){
+            if(!encoder.encode(pixels,encoded,frame)){ok=false;break;}
+            if(encoded.empty())continue;
+            if(encoded.size()<8||encoded[0]!=0||encoded[1]!=0||(encoded[2]!=1&&(encoded[2]!=0||encoded[3]!=1))||encoder.frameId()<=previous||encoder.frameId()>frame){ok=false;break;}
+            previous=encoder.frameId();++produced;
+        }
+        if(produced<8)ok=false;
         if(!ok){std::cout<<"Encoder failed; trying software fallback: "<<encoder.error()<<std::endl;continue;}
         std::cout<<"8 frames passed in "<<std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now()-start).count()<<" ms"<<std::endl;videoPassed=true;break;
     }
