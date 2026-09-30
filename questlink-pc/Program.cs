@@ -23,7 +23,7 @@ internal static class Program
 public sealed class MainForm : Form
 {
     private const int Port = 47990;
-    private const string Version = "7.11";
+    private const string Version = "7.12-dev";
 
     private readonly Label status = new();
     private readonly Label lanStatus = new();
@@ -329,7 +329,7 @@ public sealed class MainForm : Form
             return;
         }
 
-        status.Text = "Preparing QuestLink OpenVR driver and SteamVR...";
+        status.Text = "Preparing OpenComposite and QuestLink...";
         var result = await Launcher.LaunchGameAsync(game);
         status.Text = result.Message;
         RefreshRuntimeStatus();
@@ -718,17 +718,28 @@ public static class Launcher
 
             try
             {
-                Process.Start(new ProcessStartInfo
+                using var process = Process.Start(new ProcessStartInfo
                 {
                     FileName = exe,
-                    Arguments = "-vrmode openvr",
+                    Arguments = "-vrmode openvr -force-d3d11",
                     WorkingDirectory = Path.GetDirectoryName(exe)!,
                     UseShellExecute = true
                 });
 
+                if (process is null)
+                    return new LaunchResult(false, "Windows did not start Gorilla Tag.");
+
+                // Do not send the headset into VR when the game immediately crashes.
+                var exit = process.WaitForExitAsync();
+                if (await Task.WhenAny(exit, Task.Delay(8000)) == exit || process.HasExited)
+                    return new LaunchResult(false,
+                        $"Gorilla Tag exited during startup (code {process.ExitCode}). " +
+                        "Check Player.log in AppData/LocalLow/Another Axiom/Gorilla Tag and " +
+                        "AppData/Local/OpenComposite/logs/opencomposite.log.");
+
                 return new LaunchResult(
                     true,
-                    "Launching Gorilla Tag through OpenComposite -> QuestLink OpenXR. SteamVR is not used.");
+                    "Gorilla Tag is running through OpenComposite. Connect the Quest client to test VR.");
             }
             catch (Exception ex)
             {
@@ -851,14 +862,17 @@ public static class OpenCompositeManager
     private static string BundledDll =>
         Path.Combine(AppContext.BaseDirectory, "opencomposite", "openvr_api.dll");
 
-    public static bool IsBundled() => File.Exists(BundledDll);
+    private static string BundledBackend =>
+        Path.Combine(AppContext.BaseDirectory, "opencomposite", "opencomposite_backend.dll");
+
+    public static bool IsBundled() => File.Exists(BundledDll) && File.Exists(BundledBackend);
 
     public static OpenCompositeInstallResult InstallForGame(string gameRoot)
     {
-        if (!File.Exists(BundledDll))
+        if (!IsBundled())
             return new OpenCompositeInstallResult(
                 false,
-                "OpenComposite is missing from the QuestLink PC package. Download QuestLink PC v7.11.");
+                "The OpenComposite compatibility files are missing. Extract the entire QuestLink PC v7.12-dev ZIP, including its opencomposite folder.");
 
         string? target = null;
         try
@@ -897,6 +911,9 @@ public static class OpenCompositeManager
             if (!File.Exists(backup))
                 File.Copy(target, backup, overwrite: false);
 
+            // Stage the backend before the forwarding DLL so every export can resolve.
+            File.Copy(BundledBackend,
+                Path.Combine(Path.GetDirectoryName(target)!, "opencomposite_backend.dll"), overwrite: true);
             File.Copy(BundledDll, target, overwrite: true);
 
             var ini = Path.Combine(Path.GetDirectoryName(target)!, "opencomposite.ini");

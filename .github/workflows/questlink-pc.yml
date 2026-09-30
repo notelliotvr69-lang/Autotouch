@@ -1,81 +1,57 @@
 name: QuestLink PC Windows
-
 on:
   workflow_dispatch:
   push:
     paths:
-      - "questlink-pc/**"
-      - ".github/workflows/questlink-pc.yml"
-
+      - 'questlink-pc/**'
+      - '.github/workflows/questlink-pc.yml'
 permissions:
   contents: write
-
 jobs:
   build-pc:
     runs-on: windows-latest
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up .NET 8
-        uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: "8.0.x"
-
-      - name: Publish QuestLink PC
+          dotnet-version: '8.0.x'
+      - uses: ilammy/msvc-dev-cmd@v1
+      - name: Build compatibility DLL
+        shell: cmd
+        run: cl /LD /O2 questlink-pc\compat\compat.c /link /DEF:questlink-pc\compat\openvr_api.def /OUT:openvr_api.dll
+      - name: Publish and stage PC app
         shell: pwsh
         run: |
-          dotnet publish questlink-pc/QuestLink.PC.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true
-
-      - name: Download OpenComposite x64
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path dist/opencomposite | Out-Null
-          Invoke-WebRequest -Uri 'https://opencomposite.znix.xyz/builds/download_latest?branch=openxr&artefact_name=x64/openvr_api.dll' -OutFile 'dist/opencomposite/openvr_api.dll'
-          if ((Get-Item 'dist/opencomposite/openvr_api.dll').Length -lt 100000) {
-            throw 'OpenComposite download was unexpectedly small.'
-          }
-
-      - name: Stage PC build
-        shell: pwsh
-        run: |
-          $stage = "dist/QuestLinkPC-v7.11"
-          New-Item -ItemType Directory -Force -Path "$stage/opencomposite" | Out-Null
-
-          Copy-Item "questlink-pc/bin/Release/net8.0-windows/win-x64/publish/QuestLinkPC.exe" "$stage/QuestLinkPC.exe"
-          Copy-Item "dist/opencomposite/openvr_api.dll" "$stage/opencomposite/openvr_api.dll"
-
-          @'
-          QuestLink PC v7.11
-          NO STEAMVR REQUIRED FOR GORILLA TAG.
-
-          Gorilla Tag path:
-          GTAG -vrmode openvr -> bundled OpenComposite -> QuestLink OpenXR runtime -> Quest client.
-
-          QuestLink backs up Gorilla Tag's original openvr_api.dll before replacing it.
-          '@ | Set-Content "$stage/README.txt"
-
-          Compress-Archive -Path "$stage/*" -DestinationPath "dist/QuestLinkPC-v7.11.zip" -Force
-
-      - name: Upload PC build
-        uses: actions/upload-artifact@v4
+          $stage = 'dist/QuestLinkPC-v7.12-dev'
+          dotnet publish questlink-pc/QuestLink.PC.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o $stage
+          if ($LASTEXITCODE -ne 0) { throw 'PC build failed' }
+          New-Item -ItemType Directory -Force "$stage/opencomposite" | Out-Null
+          Invoke-WebRequest 'https://github.com/notelliotvr69-lang/Autotouch/releases/download/questlink-pc-v7.11/QuestLinkPC-v7.11.zip' -OutFile old-pc.zip
+          Expand-Archive old-pc.zip old-pc
+          $backend = Get-ChildItem old-pc -Recurse -Filter openvr_api.dll | Select-Object -First 1
+          if ((Get-FileHash $backend.FullName).Hash -ne '827AD85F3606A4DC4A8F5561A8CA69E4C6C1B5D2B9CD3315A461B9270B08242C') { throw 'Unexpected OpenComposite backend' }
+          Copy-Item $backend.FullName "$stage/opencomposite/opencomposite_backend.dll"
+          Copy-Item openvr_api.dll "$stage/opencomposite/openvr_api.dll"
+          Copy-Item questlink-pc/compat/README.md "$stage/COMPATIBILITY.md"
+          Copy-Item questlink-pc/README-7.12.txt "$stage/README.txt"
+          python questlink-pc/compat/test_exports.py "$stage/opencomposite"
+          if ($LASTEXITCODE -ne 0) { throw 'DLL forwarding test failed' }
+          Compress-Archive "$stage/*" dist/QuestLinkPC-v7.12-dev.zip
+      - uses: actions/upload-artifact@v4
         with:
-          name: QuestLinkPC-v7.11
-          path: |
-            dist/QuestLinkPC.exe
-            dist/QuestLinkPC-v7.11.zip
-          if-no-files-found: error
+          name: QuestLinkPC-v7.12-dev
+          path: dist/QuestLinkPC-v7.12-dev.zip
           compression-level: 0
-
-      - name: Publish GitHub Release
+      - name: Publish development download
+        if: github.ref == 'refs/heads/codex/quest3-wireless-vr'
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $tag = "questlink-pc-v7.11"
-          gh release view $tag --repo "${{ github.repository }}" *> $null
+          $tag = 'questlink-pc-v7.12-dev'
+          gh release view $tag --repo '${{ github.repository }}' *> $null
           if ($LASTEXITCODE -ne 0) {
-            gh release create $tag --repo "${{ github.repository }}" --title "QuestLink PC v7.11" --notes "QuestLink PC v7.11 removes the SteamVR dependency for Gorilla Tag. It bundles OpenComposite and routes GTAG OpenVR calls directly into the QuestLink OpenXR runtime."
+            gh release create $tag --target '${{ github.sha }}' --repo '${{ github.repository }}' --prerelease --title 'QuestLink PC v7.12-dev' --notes 'Fixes the missing VRHeadsetView export that prevents the Unity OpenVR plugin from loading. Adds early game-exit detection. Experimental: headset gameplay remains to be verified. Use with Quest APK 7.12-dev and runtime 0.4-dev.'
           }
-          gh release upload $tag "dist/QuestLinkPC-v7.11.zip" --repo "${{ github.repository }}" --clobber
+          gh release upload $tag dist/QuestLinkPC-v7.12-dev.zip --repo '${{ github.repository }}' --clobber
+          if ($LASTEXITCODE -ne 0) { throw 'Release upload failed' }
