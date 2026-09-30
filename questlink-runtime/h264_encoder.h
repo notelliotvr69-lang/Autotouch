@@ -9,6 +9,7 @@
 #include <chrono>
 #include <thread>
 #include <vector>
+#include <string>
 
 namespace ql {
 // One submitted frame -> one access unit; no B frames or accumulated video queue.
@@ -21,6 +22,8 @@ class H264Encoder {
     LONGLONG index=0;
     bool com=false,mf=false,async=false;
     bool hardwareSelected=false;
+    std::string failure;
+    bool fail(const char* stage,HRESULT hr){failure=std::string(stage)+" HRESULT="+std::to_string(static_cast<unsigned long>(hr));return false;}
     int needInput=0,haveOutput=0;
     std::vector<uint8_t> nv12;
     void setting(const GUID& key,ULONG value) {
@@ -54,13 +57,14 @@ class H264Encoder {
         if(!async)return true;
         for(;;){Ptr<IMFMediaEvent> event;HRESULT hr=events->GetEvent(MF_EVENT_FLAG_NO_WAIT,&event);
             if(hr==MF_E_NO_EVENTS_AVAILABLE)return true;if(FAILED(hr))return false;
-            HRESULT status;event->GetStatus(&status);if(FAILED(status))return false;
+            HRESULT status;event->GetStatus(&status);if(FAILED(status))return fail("encoder event",status);
             MediaEventType type;event->GetType(&type);if(type==METransformNeedInput)++needInput;if(type==METransformHaveOutput)++haveOutput;
         }
     }
     static uint8_t clamp(int v){return uint8_t(v<0?0:v>255?255:v);}
 public:
     ~H264Encoder(){events.Reset();transform.Reset();if(mf)MFShutdown();if(com)CoUninitialize();}
+    const std::string& error() const {return failure;}
     bool hardware() const { return hardwareSelected; }
     bool open(uint32_t w,uint32_t h,uint32_t rate,uint32_t bitsPerSecond,bool allowHardware=true) {
         width=w;height=h;fps=rate;bitrate=bitsPerSecond;
@@ -91,10 +95,10 @@ public:
         memcpy(bytes,nv12.data(),nv12.size());buffer->Unlock();buffer->SetCurrentLength(static_cast<DWORD>(nv12.size()));sample->AddBuffer(buffer.Get());
         sample->SetSampleTime(index*10000000/fps);sample->SetSampleDuration(10000000/fps);++index;
         auto deadline=std::chrono::steady_clock::now()+std::chrono::milliseconds(250);
-        while(async&&needInput==0){if(!pump()||std::chrono::steady_clock::now()>deadline)return false;std::this_thread::sleep_for(std::chrono::milliseconds(1));}
-        if(FAILED(transform->ProcessInput(0,sample.Get(),0)))return false;if(async)--needInput;
+        while(async&&needInput==0){if(!pump())return false;if(std::chrono::steady_clock::now()>deadline)return fail("waiting for input",E_PENDING);std::this_thread::sleep_for(std::chrono::milliseconds(1));}
+        HRESULT inputResult=transform->ProcessInput(0,sample.Get(),0);if(FAILED(inputResult))return fail("ProcessInput",inputResult);if(async)--needInput;
         for(;;){
-            if(std::chrono::steady_clock::now()>deadline||!pump())return false;
+            if(!pump())return false;if(std::chrono::steady_clock::now()>deadline)return fail("waiting for output",E_PENDING);
             if(async&&haveOutput==0){std::this_thread::sleep_for(std::chrono::milliseconds(1));continue;}
             MFT_OUTPUT_STREAM_INFO info{};if(FAILED(transform->GetOutputStreamInfo(0,&info)))return false;
             Ptr<IMFSample> outSample;Ptr<IMFMediaBuffer> outBuffer;
@@ -105,8 +109,8 @@ public:
             MFT_OUTPUT_DATA_BUFFER data{};data.pSample=outSample.Get();DWORD status=0;
             HRESULT hr=transform->ProcessOutput(0,1,&data,&status);if(async)--haveOutput;
             if(data.pEvents)data.pEvents->Release();
-            if(hr==MF_E_TRANSFORM_NEED_MORE_INPUT)return false; // Encoder buffering violates this transport's pose association.
-            if(FAILED(hr))return false;
+            if(hr==MF_E_TRANSFORM_NEED_MORE_INPUT)return fail("encoder requested another frame",hr); // Encoder buffering violates this transport's pose association.
+            if(FAILED(hr))return fail("ProcessOutput",hr);
             if(!outSample)outSample.Attach(data.pSample);
             if(!outSample||FAILED(outSample->ConvertToContiguousBuffer(&outBuffer)))return false;
             DWORD size=0;if(FAILED(outBuffer->Lock(&bytes,nullptr,&size)))return false;

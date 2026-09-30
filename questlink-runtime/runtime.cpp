@@ -603,7 +603,7 @@ void bridgeServerLoop() {
             std::vector<uint8_t> encoded;
             bool encodedOk=h264?encoder.encode(frame.bgra,encoded):encodeJpeg(frame,encoded);
             if(!encodedOk){
-                logLine("Video encoding failed; reconnecting with fallback encoder");
+                logLine("Video encoding failed; reconnecting with fallback encoder: "+encoder.error());
                 if(h264&&encoder.hardware())allowHardware=false;else if(h264)allowH264=false;
                 alive=false;break;
             }
