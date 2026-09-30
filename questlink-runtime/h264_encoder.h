@@ -84,7 +84,7 @@ class H264Encoder {
             if(!outSample||FAILED(outSample->ConvertToContiguousBuffer(&outBuffer)))return false;
             LONGLONG timestamp=0;if(FAILED(outSample->GetSampleTime(&timestamp))||timestamp<0)return fail("output timestamp",E_FAIL);
             uint64_t completedFrame=static_cast<uint64_t>((timestamp*fps+5000000)/10000000);
-            DWORD size=0;if(FAILED(outBuffer->Lock(&bytes,nullptr,&size)))return false;
+            BYTE* bytes=nullptr;DWORD size=0;if(FAILED(outBuffer->Lock(&bytes,nullptr,&size)))return false;
             ready.push_back({completedFrame,std::vector<uint8_t>(bytes,bytes+size)});outBuffer->Unlock();
             if(ready.size()>8)return fail("output queue exceeded",E_FAIL);
         }
