@@ -78,6 +78,23 @@ class H264Encoder {
             MFT_OUTPUT_DATA_BUFFER data{};data.pSample=outSample.Get();DWORD status=0;
             HRESULT hr=transform->ProcessOutput(0,1,&data,&status);if(async)--haveOutput;
             if(data.pEvents)data.pEvents->Release();
+            if(hr==MF_E_TRANSFORM_STREAM_CHANGE){
+                bool accepted=false;
+                for(DWORD typeIndex=0;typeIndex<32;++typeIndex){
+                    Ptr<IMFMediaType> type;
+                    if(FAILED(transform->GetOutputAvailableType(0,typeIndex,&type)))break;
+                    GUID subtype{};if(FAILED(type->GetGUID(MF_MT_SUBTYPE,&subtype))||subtype!=MFVideoFormat_H264)continue;
+                    UINT32 w=0,h=0;if(SUCCEEDED(MFGetAttributeSize(type.Get(),MF_MT_FRAME_SIZE,&w,&h))&&(w!=width||h!=height))continue;
+                    MFSetAttributeSize(type.Get(),MF_MT_FRAME_SIZE,width,height);
+                    MFSetAttributeRatio(type.Get(),MF_MT_FRAME_RATE,fps,1);
+                    type->SetUINT32(MF_MT_AVG_BITRATE,bitrate);
+                    if(SUCCEEDED(transform->SetOutputType(0,type.Get(),0))){accepted=true;break;}
+                }
+                if(!accepted)return fail("output format negotiation",hr);
+                // No sample was consumed; retry the pending output in its new format.
+                if(async)++haveOutput;
+                continue;
+            }
             if(hr==MF_E_TRANSFORM_NEED_MORE_INPUT)return true;
             if(FAILED(hr))return fail("ProcessOutput",hr);
             if(!outSample)outSample.Attach(data.pSample);
