@@ -1,48 +1,41 @@
 package com.autotouch.robloxog
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
-import android.graphics.Color
-import android.view.Gravity
-import android.view.ViewGroup
-import android.widget.Button
-import android.widget.LinearLayout
-import android.widget.TextView
+import android.provider.Settings
+import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.core.content.ContextCompat
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(28, 28, 28, 28)
-            setBackgroundColor(Color.rgb(16, 16, 16))
+        if (!Settings.canDrawOverlays(this)) {
+            Toast.makeText(this, "Allow "Display over other apps", then return here.", Toast.LENGTH_LONG).show()
+            startActivity(
+                Intent(
+                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    Uri.parse("package:$packageName")
+                )
+            )
+        } else {
+            startOverlay()
         }
 
-        val title = TextView(this).apply {
-            text = "ROBLOX OG UI"
-            textSize = 22f
-            setTextColor(Color.WHITE)
-            gravity = Gravity.CENTER_HORIZONTAL
-        }
-        root.addView(title, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        finish()
+    }
 
-        val status = TextView(this).apply {
-            text = "UI shell • no game injection"
-            textSize = 14f
-            setTextColor(Color.LTGRAY)
-            setPadding(0, 12, 0, 24)
+    override fun onResume() {
+        super.onResume()
+        if (!isFinishing && Settings.canDrawOverlays(this)) {
+            startOverlay()
         }
-        root.addView(status)
+    }
 
-        listOf("Fly", "Spin", "Teleport", "ESP", "Rejoin", "Console").forEach { label ->
-            val button = Button(this).apply {
-                text = label
-                setOnClickListener { status.text = "$label pressed (UI preview)" }
-            }
-            root.addView(button, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = 10 })
-        }
-
-        setContentView(root)
+    private fun startOverlay() {
+        val intent = Intent(this, OverlayService::class.java)
+        ContextCompat.startForegroundService(this, intent)
     }
 }
