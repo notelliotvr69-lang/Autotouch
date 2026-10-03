@@ -29,19 +29,53 @@ jobs:
       - name: Install SDK packages
         run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
 
-      - name: Make Gradle wrapper
-        run: gradle wrapper --gradle-version 9.0.0
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.0.0'
 
-      - name: Build release APK
-        run: ./gradlew assembleRelease
+      - name: Build unsigned APK
+        run: gradle assembleRelease
 
-      - name: Verify APK with apksigner
+      - name: Zipalign APK
+        run: |
+          ZIPALIGN="$ANDROID_HOME/build-tools/36.0.0/zipalign"
+          "$ZIPALIGN" -f -p 4 app/build/outputs/apk/release/app-release-unsigned.apk app/build/outputs/apk/release/RobloxOG-aligned.apk
+
+      - name: Create temporary signing key
+        run: |
+          keytool -genkeypair -v \
+            -keystore robloxog-release.jks \
+            -storepass android \
+            -keypass android \
+            -alias robloxog \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -dname "CN=RobloxOG, OU=Autotouch, O=Autotouch, L=Local, S=Local, C=US"
+
+      - name: Sign APK with apksigner v2/v3
         run: |
           APKSIGNER="$ANDROID_HOME/build-tools/36.0.0/apksigner"
-          "$APKSIGNER" verify --verbose app/build/outputs/apk/release/app-release-unsigned.apk || true
+          "$APKSIGNER" sign \
+            --ks robloxog-release.jks \
+            --ks-key-alias robloxog \
+            --ks-pass pass:android \
+            --key-pass pass:android \
+            --v1-signing-enabled true \
+            --v2-signing-enabled true \
+            --v3-signing-enabled true \
+            --out app/build/outputs/apk/release/RobloxOG-release.apk \
+            app/build/outputs/apk/release/RobloxOG-aligned.apk
 
-      - name: Upload APK artifact
+      - name: Verify APK signature and alignment
+        run: |
+          APKSIGNER="$ANDROID_HOME/build-tools/36.0.0/apksigner"
+          "$APKSIGNER" verify --verbose --print-certs app/build/outputs/apk/release/RobloxOG-release.apk
+          unzip -t app/build/outputs/apk/release/RobloxOG-release.apk
+
+      - name: Upload signed APK
         uses: actions/upload-artifact@v4
         with:
           name: RobloxOG-release
-          path: RobloxOG/app/build/outputs/apk/release/*.apk
+          path: RobloxOG/app/build/outputs/apk/release/RobloxOG-release.apk
