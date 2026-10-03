@@ -1,0 +1,39 @@
+name: Roblox Classic UI Build
+
+on:
+  push:
+    paths:
+      - 'RobloxOG/input/**'
+      - '.github/workflows/roblox-classic.yml'
+      - 'RobloxOG/patch/**'
+  workflow_dispatch:
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Reassemble source APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p RobloxOG/work
+          parts=(RobloxOG/input/Roblox-Classic.apk.part-*)
+          if [ "${#parts[@]}" -ne 9 ]; then
+            echo "Expected 9 APK parts; found ${#parts[@]}."
+            exit 1
+          fi
+          cat "${parts[@]}" > RobloxOG/work/Roblox-Classic.apk
+          unzip -t RobloxOG/work/Roblox-Classic.apk
+
+      - name: Print source APK hash
+        run: sha256sum RobloxOG/work/Roblox-Classic.apk
+
+      - name: Upload reconstructed source
+        uses: actions/upload-artifact@v4
+        with:
+          name: Roblox-Classic-source
+          path: RobloxOG/work/Roblox-Classic.apk
+          retention-days: 7
