@@ -1,0 +1,25 @@
+name: Build MotoFBT
+on:
+  push:
+    paths: ['MotoFBT/**']
+  workflow_dispatch:
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: MotoFBT
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+      - uses: gradle/actions/setup-gradle@v4
+        with: { gradle-version: '8.9' }
+      - name: Download MediaPipe model
+        run: mkdir -p app/src/main/assets && curl -L --fail -o app/src/main/assets/pose_landmarker_full.task https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/latest/pose_landmarker_full.task
+      - name: Build debug APK
+        run: gradle assembleDebug --stacktrace
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MotoFBT-debug
+          path: MotoFBT/app/build/outputs/apk/debug/app-debug.apk
