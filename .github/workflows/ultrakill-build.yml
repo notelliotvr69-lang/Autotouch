@@ -1,0 +1,53 @@
+name: ULTRAKILL Arsenal Expansion build
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "ULTRAKILL-Arsenal-Expansion/**"
+      - ".github/workflows/ultrakill-build.yml"
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Check for game reference bundle
+        shell: pwsh
+        env:
+          REFERENCE_BUNDLE_URL: ${{ vars.ULTRAKILL_REFERENCE_BUNDLE_URL }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:REFERENCE_BUNDLE_URL)) {
+            Write-Error "Missing repository variable ULTRAKILL_REFERENCE_BUNDLE_URL. The build needs the game's Managed reference assemblies and BepInEx core DLLs; these are not included in this repository."
+          }
+          Invoke-WebRequest -Uri $env:REFERENCE_BUNDLE_URL -OutFile references.zip
+          Expand-Archive references.zip -DestinationPath .build -Force
+          if (!(Test-Path ".build/ULTRAKILL_Data/Managed/Assembly-CSharp.dll")) {
+            Write-Error "Reference bundle must contain ULTRAKILL_Data/Managed/Assembly-CSharp.dll."
+          }
+          if (!(Test-Path ".build/BepInEx/core/BepInEx.dll")) {
+            Write-Error "Reference bundle must contain BepInEx/core/BepInEx.dll."
+          }
+
+      - name: Build plugin
+        run: dotnet build ULTRAKILL-Arsenal-Expansion/ArsenalExpansion.csproj --configuration Release
+
+      - name: Package plugin
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path out | Out-Null
+          Copy-Item "ULTRAKILL-Arsenal-Expansion/bin/Release/netstandard2.1/ArsenalExpansion.dll" "out/ArsenalExpansion.dll"
+          Copy-Item "ULTRAKILL-Arsenal-Expansion/README.md" "out/README.md"
+          Compress-Archive -Path out/* -DestinationPath ArsenalExpansion-build.zip -Force
+
+      - name: Upload compiled plugin artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ArsenalExpansion-build
+          path: ArsenalExpansion-build.zip
