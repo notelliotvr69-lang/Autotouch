@@ -8,66 +8,53 @@ using UnityEngine.SceneManagement;
 
 namespace ArsenalExpansion
 {
-    [BepInPlugin("notelliotvr69.arsenalexpansion", "Arsenal Expansion", "0.2.1")]
+    [BepInPlugin("notelliotvr69.arsenalexpansion", "Arsenal Expansion", "0.2.2")]
     public sealed class Plugin : BaseUnityPlugin
     {
         internal static ManualLogSource Log;
         private bool addingWeapons;
+        private bool weaponsAdded;
 
         private void Awake()
         {
             Log = Logger;
-            SceneManager.sceneLoaded += OnSceneLoaded;
-            Log.LogInfo("Arsenal Expansion loaded. Museum weapons will be added to the extra weapon slot; no Cheats-menu registration is used.");
+            Log.LogInfo("Arsenal Expansion loaded. Waiting for gameplay weapon manager.");
+            StartCoroutine(WatchForGameplay());
         }
 
-        private void OnDestroy()
+        private IEnumerator WatchForGameplay()
         {
-            SceneManager.sceneLoaded -= OnSceneLoaded;
-        }
-
-        private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
-        {
-            if (scene.name == "Main Menu" || scene.name == "Intro" || addingWeapons)
-                return;
-
-            StartCoroutine(AddMuseumWeaponsWhenReady());
-        }
-
-        private IEnumerator AddMuseumWeaponsWhenReady()
-        {
-            if (addingWeapons)
-                yield break;
-
-            addingWeapons = true;
-            int framesWaited = 0;
-            while (MonoSingleton<GunControl>.Instance == null && framesWaited < 300)
+            while (!weaponsAdded)
             {
-                framesWaited++;
-                yield return null;
-            }
+                yield return new WaitForSeconds(1f);
 
-            GunControl guns = MonoSingleton<GunControl>.Instance;
-            if (guns == null)
-            {
-                Log.LogWarning("GunControl did not initialize; museum weapons were not added in this scene.");
-                addingWeapons = false;
-                yield break;
-            }
+                string sceneName = SceneManager.GetActiveScene().name;
+                if (sceneName == "Main Menu" || sceneName == "Intro" || addingWeapons)
+                    continue;
 
-            try
-            {
-                AddWeapon("Assets/Prefabs/Weapons/Old/Beamcutter Blue.prefab", "Beamcutter Blue", guns);
-                AddWeapon("Assets/Prefabs/Weapons/Old/Black Hole Cannon.prefab", "Black Hole Cannon", guns);
-                guns.UpdateWeaponList();
-                Log.LogInfo("Added Beamcutter and Black Hole Cannon to extra weapon slot.");
-            }
-            catch (Exception ex)
-            {
-                Log.LogError("Could not add museum weapons. Check the game version and prefab paths: " + ex);
-            }
+                GunControl guns = MonoSingleton<GunControl>.Instance;
+                if (guns == null)
+                    continue;
 
-            addingWeapons = false;
+                addingWeapons = true;
+                Log.LogInfo("Gameplay scene detected (" + sceneName + "); attempting to add museum weapons.");
+                try
+                {
+                    AddWeapon("Assets/Prefabs/Weapons/Old/Beamcutter Blue.prefab", "Beamcutter Blue", guns);
+                    AddWeapon("Assets/Prefabs/Weapons/Old/Black Hole Cannon.prefab", "Black Hole Cannon", guns);
+                    guns.UpdateWeaponList();
+                    weaponsAdded = true;
+                    Log.LogInfo("Added Beamcutter and Black Hole Cannon to extra weapon slot.");
+                }
+                catch (Exception ex)
+                {
+                    Log.LogError("Could not add museum weapons; will retry: " + ex);
+                }
+                finally
+                {
+                    addingWeapons = false;
+                }
+            }
         }
 
         private static void AddWeapon(string prefabPath, string weaponName, GunControl guns)
@@ -78,8 +65,6 @@ namespace ArsenalExpansion
                     return;
             }
 
-            // Resolve AssetHelper by reflection so the build does not need a compile-time
-            // reference to Unity.Addressables, which is only used by the helper's API.
             Type helperType = typeof(GunControl).Assembly.GetType("AssetHelper");
             if (helperType == null)
                 throw new InvalidOperationException("Could not find AssetHelper in Assembly-CSharp.");
