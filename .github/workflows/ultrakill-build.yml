@@ -5,6 +5,7 @@ on:
   push:
     paths:
       - "ULTRAKILL-Arsenal-Expansion/**"
+      - "UKReferences.zip"
       - ".github/workflows/ultrakill-build.yml"
 
 jobs:
@@ -14,25 +15,36 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Set up .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
           dotnet-version: "8.0.x"
 
-      - name: Check for game reference bundle
+      - name: Prepare game reference DLLs
         shell: pwsh
-        env:
-          REFERENCE_BUNDLE_URL: ${{ vars.ULTRAKILL_REFERENCE_BUNDLE_URL }}
         run: |
-          if ([string]::IsNullOrWhiteSpace($env:REFERENCE_BUNDLE_URL)) {
-            Write-Error "Missing repository variable ULTRAKILL_REFERENCE_BUNDLE_URL. The build needs the game's Managed reference assemblies and BepInEx core DLLs; these are not included in this repository."
+          if (!(Test-Path "UKReferences.zip")) {
+            throw "UKReferences.zip is missing from the repository root."
           }
-          Invoke-WebRequest -Uri $env:REFERENCE_BUNDLE_URL -OutFile references.zip
-          Expand-Archive references.zip -DestinationPath .build -Force
-          if (!(Test-Path ".build/ULTRAKILL_Data/Managed/Assembly-CSharp.dll")) {
-            Write-Error "Reference bundle must contain ULTRAKILL_Data/Managed/Assembly-CSharp.dll."
-          }
-          if (!(Test-Path ".build/BepInEx/core/BepInEx.dll")) {
-            Write-Error "Reference bundle must contain BepInEx/core/BepInEx.dll."
+
+          Expand-Archive -LiteralPath "UKReferences.zip" -DestinationPath ".reference-extract" -Force
+          New-Item -ItemType Directory -Force -Path ".build/ULTRAKILL_Data/Managed" | Out-Null
+          New-Item -ItemType Directory -Force -Path ".build/BepInEx/core" | Out-Null
+
+          $required = @(
+            @{ Name = "Assembly-CSharp.dll"; Destination = ".build/ULTRAKILL_Data/Managed/Assembly-CSharp.dll" },
+            @{ Name = "UnityEngine.dll"; Destination = ".build/ULTRAKILL_Data/Managed/UnityEngine.dll" },
+            @{ Name = "UnityEngine.CoreModule.dll"; Destination = ".build/ULTRAKILL_Data/Managed/UnityEngine.CoreModule.dll" },
+            @{ Name = "BepInEx.dll"; Destination = ".build/BepInEx/core/BepInEx.dll" },
+            @{ Name = "0Harmony.dll"; Destination = ".build/BepInEx/core/0Harmony.dll" }
+          )
+
+          foreach ($file in $required) {
+            $matches = @(Get-ChildItem ".reference-extract" -Recurse -File -Filter $file.Name)
+            if ($matches.Count -eq 0) {
+              throw "UKReferences.zip is missing $($file.Name). Make sure all five DLL files are inside the ZIP."
+            }
+            Copy-Item -LiteralPath $matches[0].FullName -Destination $file.Destination -Force
+            Write-Host "Prepared $($file.Name)"
           }
 
       - name: Build plugin
