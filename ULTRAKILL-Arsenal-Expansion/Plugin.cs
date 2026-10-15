@@ -1,4 +1,6 @@
+using System;
 using System.Collections;
+using System.Reflection;
 using BepInEx;
 using BepInEx.Logging;
 using UnityEngine;
@@ -6,7 +8,7 @@ using UnityEngine.SceneManagement;
 
 namespace ArsenalExpansion
 {
-    [BepInPlugin("notelliotvr69.arsenalexpansion", "Arsenal Expansion", "0.2.0")]
+    [BepInPlugin("notelliotvr69.arsenalexpansion", "Arsenal Expansion", "0.2.1")]
     public sealed class Plugin : BaseUnityPlugin
     {
         internal static ManualLogSource Log;
@@ -60,7 +62,7 @@ namespace ArsenalExpansion
                 guns.UpdateWeaponList();
                 Log.LogInfo("Added Beamcutter and Black Hole Cannon to extra weapon slot.");
             }
-            catch (System.Exception ex)
+            catch (Exception ex)
             {
                 Log.LogError("Could not add museum weapons. Check the game version and prefab paths: " + ex);
             }
@@ -76,9 +78,25 @@ namespace ArsenalExpansion
                     return;
             }
 
-            GameObject prefab = AssetHelper.LoadPrefab(prefabPath);
+            // Resolve AssetHelper by reflection so the build does not need a compile-time
+            // reference to Unity.Addressables, which is only used by the helper's API.
+            Type helperType = typeof(GunControl).Assembly.GetType("AssetHelper");
+            if (helperType == null)
+                throw new InvalidOperationException("Could not find AssetHelper in Assembly-CSharp.");
+
+            MethodInfo loadMethod = helperType.GetMethod(
+                "LoadPrefab",
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static,
+                null,
+                new[] { typeof(string) },
+                null);
+
+            if (loadMethod == null)
+                throw new InvalidOperationException("Could not find AssetHelper.LoadPrefab(string).");
+
+            GameObject prefab = loadMethod.Invoke(null, new object[] { prefabPath }) as GameObject;
             if (prefab == null)
-                throw new System.InvalidOperationException("Could not load prefab: " + prefabPath);
+                throw new InvalidOperationException("Could not load prefab: " + prefabPath);
 
             GameObject weapon = UnityEngine.Object.Instantiate(prefab, guns.transform);
             weapon.name = prefab.name;
