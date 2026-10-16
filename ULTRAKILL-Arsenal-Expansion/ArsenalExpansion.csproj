@@ -4,7 +4,7 @@
     <LangVersion>latest</LangVersion>
     <Nullable>disable</Nullable>
     <ImplicitUsings>disable</ImplicitUsings>
-    <AssemblyName>ArsenalExpansion-v0.3.0</AssemblyName>
+    <AssemblyName>ArsenalExpansion-v0.4.0</AssemblyName>
     <RootNamespace>ArsenalExpansion</RootNamespace>
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
   </PropertyGroup>
