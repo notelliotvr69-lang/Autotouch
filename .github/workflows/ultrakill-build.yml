@@ -15,6 +15,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Fetch reference archive from main if needed
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: reference-source
+          sparse-checkout: |
+            UKReferenceZ.zip
+            UKReferences.zip
+          sparse-checkout-cone-mode: false
+
       - name: Set up .NET
         uses: actions/setup-dotnet@v5
         with:
@@ -23,9 +33,9 @@ jobs:
       - name: Prepare game reference DLLs
         shell: pwsh
         run: |
-          $referenceZip = if (Test-Path "UKReferenceZ.zip") { "UKReferenceZ.zip" } elseif (Test-Path "UKReferences.zip") { "UKReferences.zip" } else { $null }
+          $referenceZip = if (Test-Path "UKReferenceZ.zip") { "UKReferenceZ.zip" } elseif (Test-Path "UKReferences.zip") { "UKReferences.zip" } elseif (Test-Path "reference-source/UKReferenceZ.zip") { "reference-source/UKReferenceZ.zip" } elseif (Test-Path "reference-source/UKReferences.zip") { "reference-source/UKReferences.zip" } else { $null }
           if (!$referenceZip) {
-            throw "Neither UKReferenceZ.zip nor UKReferences.zip exists in the repository root."
+            throw "Neither UKReferenceZ.zip nor UKReferences.zip exists in the mod branch or main branch."
           }
           Write-Host "Using reference archive: $referenceZip"
           Expand-Archive -LiteralPath $referenceZip -DestinationPath ".reference-extract" -Force
