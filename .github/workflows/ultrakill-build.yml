@@ -7,6 +7,7 @@ on:
       - "ULTRAKILL-Arsenal-Expansion/**"
       - "UKReferences.zip"
       - "UKReferenceZ.zip"
+      - "ULTRAKILL referenceZ 2.zip"
       - ".github/workflows/ultrakill-build.yml"
 
 jobs:
@@ -23,6 +24,7 @@ jobs:
           sparse-checkout: |
             UKReferenceZ.zip
             UKReferences.zip
+            ULTRAKILL referenceZ 2.zip
           sparse-checkout-cone-mode: false
 
       - name: Set up .NET
@@ -33,9 +35,9 @@ jobs:
       - name: Prepare game reference DLLs
         shell: pwsh
         run: |
-          $referenceZip = if (Test-Path "UKReferenceZ.zip") { "UKReferenceZ.zip" } elseif (Test-Path "UKReferences.zip") { "UKReferences.zip" } elseif (Test-Path "reference-source/UKReferenceZ.zip") { "reference-source/UKReferenceZ.zip" } elseif (Test-Path "reference-source/UKReferences.zip") { "reference-source/UKReferences.zip" } else { $null }
+          $referenceZip = if (Test-Path "UKReferenceZ.zip") { "UKReferenceZ.zip" } elseif (Test-Path "UKReferences.zip") { "UKReferences.zip" } elseif (Test-Path "reference-source/ULTRAKILL referenceZ 2.zip") { "reference-source/ULTRAKILL referenceZ 2.zip" } elseif (Test-Path "reference-source/UKReferenceZ.zip") { "reference-source/UKReferenceZ.zip" } elseif (Test-Path "reference-source/UKReferences.zip") { "reference-source/UKReferences.zip" } else { $null }
           if (!$referenceZip) {
-            throw "Neither UKReferenceZ.zip nor UKReferences.zip exists in the mod branch or main branch."
+            throw "No supported ULTRAKILL reference archive exists in the mod branch or main branch."
           }
           Write-Host "Using reference archive: $referenceZip"
           Expand-Archive -LiteralPath $referenceZip -DestinationPath ".reference-extract" -Force
