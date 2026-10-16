@@ -8,7 +8,7 @@ using UnityEngine.SceneManagement;
 
 namespace ArsenalExpansion
 {
-    [BepInPlugin("notelliotvr69.arsenalexpansion", "Arsenal Expansion", "0.2.2")]
+    [BepInPlugin("notelliotvr69.arsenalexpansion030", "Arsenal Expansion 0.3.0", "0.3.0")]
     public sealed class Plugin : BaseUnityPlugin
     {
         internal static ManualLogSource Log;
@@ -18,7 +18,7 @@ namespace ArsenalExpansion
         private void Awake()
         {
             Log = Logger;
-            Log.LogInfo("Arsenal Expansion loaded. Waiting for gameplay weapon manager.");
+            Log.LogInfo("Arsenal Expansion 0.3.0 loaded. Waiting for gameplay weapon manager.");
             StartCoroutine(WatchForGameplay());
         }
 
