@@ -69,8 +69,12 @@ jobs:
       - name: Package plugin
         shell: pwsh
         run: |
+          $builtDll = Get-ChildItem "ULTRAKILL-Arsenal-Expansion/bin/Release" -Recurse -File -Filter "ArsenalExpansion*.dll" | Select-Object -First 1
+          if (!$builtDll) {
+            throw "Build output DLL not found under ULTRAKILL-Arsenal-Expansion/bin/Release."
+          }
           New-Item -ItemType Directory -Force -Path out | Out-Null
-          Copy-Item "ULTRAKILL-Arsenal-Expansion/bin/Release/netstandard2.1/ArsenalExpansion.dll" "out/ArsenalExpansion.dll"
+          Copy-Item -LiteralPath $builtDll.FullName -Destination "out/ArsenalExpansion.dll"
           Copy-Item "ULTRAKILL-Arsenal-Expansion/README.md" "out/README.md"
           Compress-Archive -Path out/* -DestinationPath ArsenalExpansion-v0.4.0-build.zip -Force
 
