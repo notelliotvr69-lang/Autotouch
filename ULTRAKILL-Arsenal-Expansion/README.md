@@ -1,17 +1,22 @@
-# ULTRAKILL Arsenal Expansion 0.4.0
+# ULTRAKILL Arsenal Expansion
 
-A BepInEx 5 x64 plugin intended to make ULTRAKILL gear and weapon variants available without completing the campaign acts.
+A BepInEx 5 x64 plugin project. The current code keeps the separate gear-check patch; the rejected Momentum Overdrive mechanic has been removed.
 
-## Intended behavior
+## Reclaimer arm — in progress
 
-- Patches `GameProgressSaver.CheckGear` so the game treats gear as unlocked while this plugin is loaded.
-- Does not write unlocks into the player's save file.
-- Does not add museum weapons or depend on Gabriel model/texture files.
+The target is a third selectable arm with yellow/gold plating, based on the supplied reference image. Intended behavior:
+
+- Catch and store one enemy projectile when successfully parrying it.
+- Launch the stored projectile with the next punch.
+- Allow normal punches while no projectile is stored.
+- Register as a custom arm rather than merely changing a normal punch effect.
+
+The arm is not yet implemented or verified in-game. A successful plugin build alone will not prove arm selection, visuals, projectile capture, or projectile release.
 
 ## Build and install
 
-The GitHub Actions workflow builds the plugin against game and BepInEx reference DLLs supplied in one of the repository's reference ZIP archives. On a successful build, download the `ArsenalExpansion-v0.4.0-build` artifact, extract it, and place `ArsenalExpansion.dll` in the game's `BepInEx/plugins` folder.
+The GitHub Actions workflow builds against game and BepInEx reference DLLs supplied in one of the repository's reference ZIP archives. A successful workflow produces the `ArsenalExpansion-v0.4.0-build` artifact. Extract it and place `ArsenalExpansion.dll` in the game's `BepInEx/plugins` folder.
 
 ## Testing status
 
-This implementation is based on the game's `GameProgressSaver.CheckGear` gear-check API used by other ULTRAKILL mods. A successful compile still does not prove that every shop UI and variant-equipment path honors this check; in-game verification is required. The plugin does not permanently unlock or alter campaign progression in the save file.
+The gear-check patch is based on `GameProgressSaver.CheckGear`; it does not write unlocks into the save file and may not make every weapon variant equippable. In-game verification is required.
