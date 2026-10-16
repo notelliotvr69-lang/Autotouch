@@ -34,6 +34,8 @@ jobs:
             @{ Name = "Assembly-CSharp.dll"; Destination = ".build/ULTRAKILL_Data/Managed/Assembly-CSharp.dll" },
             @{ Name = "UnityEngine.dll"; Destination = ".build/ULTRAKILL_Data/Managed/UnityEngine.dll" },
             @{ Name = "UnityEngine.CoreModule.dll"; Destination = ".build/ULTRAKILL_Data/Managed/UnityEngine.CoreModule.dll" },
+            @{ Name = "UnityEngine.PhysicsModule.dll"; Destination = ".build/ULTRAKILL_Data/Managed/UnityEngine.PhysicsModule.dll" },
+            @{ Name = "UnityEngine.InputLegacyModule.dll"; Destination = ".build/ULTRAKILL_Data/Managed/UnityEngine.InputLegacyModule.dll" },
             @{ Name = "BepInEx.dll"; Destination = ".build/BepInEx/core/BepInEx.dll" },
             @{ Name = "0Harmony.dll"; Destination = ".build/BepInEx/core/0Harmony.dll" }
           )
@@ -41,7 +43,7 @@ jobs:
           foreach ($file in $required) {
             $matches = @(Get-ChildItem ".reference-extract" -Recurse -File -Filter $file.Name)
             if ($matches.Count -eq 0) {
-              throw "UKReferences.zip is missing $($file.Name). Make sure all five DLL files are inside the ZIP."
+              throw "UKReferences.zip is missing $($file.Name). Include the Unity PhysicsModule and InputLegacyModule DLLs as well as the existing required DLLs."
             }
             Copy-Item -LiteralPath $matches[0].FullName -Destination $file.Destination -Force
             Write-Host "Prepared $($file.Name)"
@@ -56,10 +58,10 @@ jobs:
           New-Item -ItemType Directory -Force -Path out | Out-Null
           Copy-Item "ULTRAKILL-Arsenal-Expansion/bin/Release/netstandard2.1/ArsenalExpansion.dll" "out/ArsenalExpansion.dll"
           Copy-Item "ULTRAKILL-Arsenal-Expansion/README.md" "out/README.md"
-          Compress-Archive -Path out/* -DestinationPath ArsenalExpansion-v0.3.0-build.zip -Force
+          Compress-Archive -Path out/* -DestinationPath ArsenalExpansion-v0.4.0-build.zip -Force
 
       - name: Upload compiled plugin artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ArsenalExpansion-v0.3.0-build
-          path: ArsenalExpansion-build.zip
+          name: ArsenalExpansion-v0.4.0-build
+          path: ArsenalExpansion-v0.4.0-build.zip
