@@ -1,4 +1,4 @@
-name: ULTRAKILL Arsenal Expansion build
+name: ULTRAKILL Arsenal Expansion 0.4.0 build
 
 on:
   workflow_dispatch:
@@ -78,12 +78,12 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path out | Out-Null
-          Copy-Item "ULTRAKILL-Arsenal-Expansion/bin/Release/netstandard2.1/ArsenalExpansion-v0.3.0.dll" "out/ArsenalExpansion.dll"
+          Copy-Item "ULTRAKILL-Arsenal-Expansion/bin/Release/netstandard2.1/ArsenalExpansion-v0.4.0.dll" "out/ArsenalExpansion.dll"
           Copy-Item "ULTRAKILL-Arsenal-Expansion/README.md" "out/README.md"
-          Compress-Archive -Path out/* -DestinationPath ArsenalExpansion-v0.3.0-build.zip -Force
+          Compress-Archive -Path out/* -DestinationPath ArsenalExpansion-v0.4.0-build.zip -Force
 
       - name: Upload compiled plugin artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ArsenalExpansion-v0.3.0-build
-          path: ArsenalExpansion-v0.3.0-build.zip
+          name: ArsenalExpansion-v0.4.0-build
+          path: ArsenalExpansion-v0.4.0-build.zip
