@@ -16,7 +16,7 @@ namespace ArsenalExpansion
             try
             {
                 harmony.PatchAll(typeof(Plugin).Assembly);
-                Logger.LogInfo("Arsenal Expansion loaded. Reclaimer prototype mechanics are enabled on the current arm: parry to store one projectile, next punch to release it.");
+                Logger.LogInfo("Arsenal Expansion loaded. Reclaimer prototype: parry a projectile with Feedbacker to store it, then punch with Knuckleblaster to release it.");
             }
             catch (Exception ex)
             {
@@ -48,10 +48,9 @@ namespace ArsenalExpansion
     }
 
     /// <summary>
-    /// Prototype of the Reclaimer's capture/release loop, temporarily hooked to the
-    /// existing arm's successful parry and punch events until custom arm registration
-    /// is integrated. Stores one parried projectile GameObject and releases it on the
-    /// next PunchStart.
+    /// Prototype of the Reclaimer capture/release loop: Feedbacker stores one successfully
+    /// parried projectile; Knuckleblaster releases it on its next punch. Custom arm
+    /// registration is not integrated yet.
     /// </summary>
     internal static class ReclaimerMechanics
     {
@@ -94,7 +93,9 @@ namespace ArsenalExpansion
         {
             private static void Postfix(Punch __instance)
             {
-                if (storedProjectile == null)
+                // FistType.Heavy is the Knuckleblaster. Feedbacker punches must not
+                // consume the stored projectile; only the Knuckleblaster releases it.
+                if (__instance == null || __instance.type != FistType.Heavy || storedProjectile == null)
                     return;
 
                 GameObject projectileObject = storedProjectile;
