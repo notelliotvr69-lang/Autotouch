@@ -1,31 +1,31 @@
 # ULTRAKILL Arsenal Expansion
 
-BepInEx 5 x64 plugin project. The current experimental build adds the existing Museum weapons and a custom **GODSPLITTER** weapon prototype to the extra weapon slot.
+BepInEx 5 x64 plugin project for ULTRAKILL.
 
-## GODSPLITTER concept
+## Current focus: Gabriel's Arm
 
-A weapon inspired by Gabriel's gold, white, silver, and blue divine aesthetic. It is available through the mod's extra weapon slot and does not require defeating Gabriel.
+The current development step is the arm slot only. The separate GODSPLITTER weapon is intentionally not registered while the arm is being built.
 
-- **Primary fire — Divine Edge:** fast sword slash with a short recovery.
-- **Secondary fire — SMITE:** right-click calls a golden light strike onto the point under the crosshair, with a cooldown.
-- **Kill afterimage:** when the game exposes enemy health in a readable way and the damage call succeeds, a sword kill attempts one golden follow-up slash against a nearby enemy.
-- **Story idea:** an alternate mod encounter has Gabriel lose his sword arm; he later returns with a replacement. This is a mod concept, not original-game canon.
+Planned arm design:
+- White/silver armor with gold divine detailing.
+- A fast, combo-friendly primary punch using the game's actual arm/punch system.
+- A later arm-specific secondary action for throwing Gabriel's divine-light sword. That input must only be intercepted while Gabriel's Arm is equipped; all other arms and guns must keep their normal behavior.
 
 ## Build
 
-The GitHub Actions workflow can be started manually from the Actions tab. It compiles against game Managed assemblies and BepInEx core DLLs supplied in `UKReferences.zip` at the repository root. The archive must contain:
+The GitHub Actions workflow compiles against game Managed assemblies and BepInEx core DLLs supplied in the repository's ULTRAKILL reference archive. The archive must contain:
 - `Assembly-CSharp.dll`
 - `UnityEngine.dll`
 - `UnityEngine.CoreModule.dll`
+- `UnityEngine.PhysicsModule.dll`
+- `UnityEngine.InputLegacyModule.dll`
 - `BepInEx.dll`
 - `0Harmony.dll`
 
 Do not commit or publicly redistribute the game's assemblies.
 
-## Important prototype status
+## Prototype status
 
-**This is an experimental first pass, not a verified release.** The sword model and beam are generated from simple Unity primitives at runtime. Enemy damage is attempted through reflection because ULTRAKILL's internal damage API is version-sensitive. The custom object is registered into the existing extra weapon list, but the slot's display, selection/holstering behavior, damage signatures, and visuals need an actual compile and in-game test. Expect bugs; keep a backup of your current plugin DLL.
+This is an experimental development build, not a verified release. The arm integration and visual overlay must still be tested in-game. A successful compile alone does not prove the arm appears, cycles correctly, or has the intended punch feel.
 
-The build workflow packages its DLL as a downloadable Actions artifact. A successful compile does not prove the weapon works correctly in-game.
-
-The plugin does not register or invoke CheatsManager. That does not guarantee anything about achievement or leaderboard eligibility; this can depend on ULTRAKILL and other installed mods.
+The separate GODSPLITTER weapon is deferred until the arm slot is working. No Museum weapons are included in this project scope.
