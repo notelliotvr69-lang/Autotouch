@@ -85,6 +85,30 @@ namespace ArsenalExpansion
             swordRoot.localPosition = swordBasePosition;
             swordRoot.localRotation = swordBaseRotation;
 
+            // Gabriel-inspired armored arm, included in the first-person sword viewmodel.
+            // Stylized prototype geometry; a custom final mesh can replace these pieces later.
+            MakePart("Armored Forearm", PrimitiveType.Cube, swordRoot,
+                new Vector3(-0.13f, -0.34f, -0.015f), new Vector3(0.19f, 0.39f, 0.16f),
+                Quaternion.Euler(0f, 0f, -19f), new Color(0.82f, 0.84f, 0.88f));
+            MakePart("Forearm Gold Plate", PrimitiveType.Cube, swordRoot,
+                new Vector3(-0.13f, -0.31f, 0.073f), new Vector3(0.13f, 0.28f, 0.025f),
+                Quaternion.Euler(0f, 0f, -19f), Gold);
+            MakePart("Forearm Light Channel", PrimitiveType.Cube, swordRoot,
+                new Vector3(-0.13f, -0.30f, 0.091f), new Vector3(0.035f, 0.23f, 0.012f),
+                Quaternion.Euler(0f, 0f, -19f), new Color(0.2f, 0.7f, 1f));
+            MakePart("Wrist Guard", PrimitiveType.Cube, swordRoot,
+                new Vector3(-0.035f, -0.12f, 0.005f), new Vector3(0.20f, 0.10f, 0.17f),
+                Quaternion.Euler(0f, 0f, -8f), new Color(0.72f, 0.75f, 0.81f));
+            MakePart("Wrist Gold Trim", PrimitiveType.Cube, swordRoot,
+                new Vector3(-0.035f, -0.12f, 0.096f), new Vector3(0.18f, 0.025f, 0.018f),
+                Quaternion.Euler(0f, 0f, -8f), Gold);
+            MakePart("Gauntlet Hand", PrimitiveType.Sphere, swordRoot,
+                new Vector3(0.025f, -0.105f, -0.005f), new Vector3(0.12f, 0.15f, 0.11f),
+                Quaternion.Euler(0f, 0f, 0f), new Color(0.88f, 0.89f, 0.92f));
+            MakePart("Gauntlet Knuckle Plate", PrimitiveType.Cube, swordRoot,
+                new Vector3(0.025f, -0.065f, 0.055f), new Vector3(0.12f, 0.045f, 0.035f),
+                Quaternion.Euler(0f, 0f, -4f), Gold);
+
             MakePart("Silver Hilt", PrimitiveType.Cylinder, swordRoot,
                 new Vector3(0f, -0.12f, 0f), new Vector3(0.045f, 0.19f, 0.045f),
                 Quaternion.Euler(0f, 0f, 0f), new Color(0.58f, 0.62f, 0.68f));
