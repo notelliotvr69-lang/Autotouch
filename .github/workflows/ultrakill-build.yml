@@ -6,6 +6,7 @@ on:
     paths:
       - "ULTRAKILL-Arsenal-Expansion/**"
       - "UKReferences.zip"
+      - "UKReferenceZ.zip"
       - ".github/workflows/ultrakill-build.yml"
 
 jobs:
@@ -22,11 +23,12 @@ jobs:
       - name: Prepare game reference DLLs
         shell: pwsh
         run: |
-          if (!(Test-Path "UKReferences.zip")) {
-            throw "UKReferences.zip is missing from the repository root."
+          $referenceZip = if (Test-Path "UKReferenceZ.zip") { "UKReferenceZ.zip" } elseif (Test-Path "UKReferences.zip") { "UKReferences.zip" } else { $null }
+          if (!$referenceZip) {
+            throw "Neither UKReferenceZ.zip nor UKReferences.zip exists in the repository root."
           }
-
-          Expand-Archive -LiteralPath "UKReferences.zip" -DestinationPath ".reference-extract" -Force
+          Write-Host "Using reference archive: $referenceZip"
+          Expand-Archive -LiteralPath $referenceZip -DestinationPath ".reference-extract" -Force
           New-Item -ItemType Directory -Force -Path ".build/ULTRAKILL_Data/Managed" | Out-Null
           New-Item -ItemType Directory -Force -Path ".build/BepInEx/core" | Out-Null
 
@@ -43,7 +45,7 @@ jobs:
           foreach ($file in $required) {
             $matches = @(Get-ChildItem ".reference-extract" -Recurse -File -Filter $file.Name)
             if ($matches.Count -eq 0) {
-              throw "UKReferences.zip is missing $($file.Name). Include the Unity PhysicsModule and InputLegacyModule DLLs as well as the existing required DLLs."
+              throw "$referenceZip is missing $($file.Name). Check that the archive contains the required game and Unity DLLs."
             }
             Copy-Item -LiteralPath $matches[0].FullName -Destination $file.Destination -Force
             Write-Host "Prepared $($file.Name)"
