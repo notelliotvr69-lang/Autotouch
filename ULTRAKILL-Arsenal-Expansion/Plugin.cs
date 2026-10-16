@@ -1,76 +1,50 @@
 using System;
 using System.Collections;
 using BepInEx;
+using HarmonyLib;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
 namespace ArsenalExpansion
 {
-    [BepInPlugin("notelliotvr69.arsenalexpansion030", "Arsenal Expansion - GODSPLITTER", "0.4.1")]
+    [BepInPlugin("notelliotvr69.arsenalexpansion030", "Arsenal Expansion - Gabriel's Arm", "0.5.0")]
     public sealed class Plugin : BaseUnityPlugin
     {
         internal static BepInEx.Logging.ManualLogSource Log;
-        private bool addingWeapon;
-        private bool weaponAdded;
+        private Harmony harmony;
 
         private void Awake()
         {
             Log = Logger;
-            Log.LogInfo("Arsenal Expansion loaded. GODSPLITTER-only build; Museum weapons are disabled.");
-            StartCoroutine(WatchForGameplay());
+            harmony = new Harmony("notelliotvr69.arsenalexpansion.gabrielsarm");
+            harmony.PatchAll();
+            Log.LogInfo("Arsenal Expansion loaded. Gabriel's Arm prototype enabled; weapon work is intentionally paused.");
+            StartCoroutine(WaitForGameplay());
         }
 
-        private IEnumerator WatchForGameplay()
+        private IEnumerator WaitForGameplay()
         {
-            while (!weaponAdded)
+            while (true)
             {
                 yield return new WaitForSeconds(1f);
-                string sceneName = SceneManager.GetActiveScene().name;
-                if (sceneName == "Main Menu" || sceneName == "Intro" || addingWeapon)
+                if (SceneManager.GetActiveScene().name == "Main Menu" ||
+                    SceneManager.GetActiveScene().name == "Intro")
                     continue;
 
-                GunControl guns = MonoSingleton<GunControl>.Instance;
-                if (guns == null) continue;
-
-                addingWeapon = true;
-                try
+                FistControl fists = MonoSingleton<FistControl>.Instance;
+                if (fists != null)
                 {
-                    AddGodsplitter(guns);
-                    guns.UpdateWeaponList();
-                    Log.LogInfo("GODSPLITTER registered in slot6. slot6 count: " + guns.slot6.Count);
-                    weaponAdded = true;
-                }
-                catch (Exception ex)
-                {
-                    Log.LogError("GODSPLITTER registration failed; will retry: " + ex);
-                }
-                finally
-                {
-                    addingWeapon = false;
+                    GabrielArmController.TryInitialize();
+                    yield break;
                 }
             }
         }
 
-        private static void AddGodsplitter(GunControl guns)
+        private void OnDestroy()
         {
-            foreach (Transform child in guns.transform)
-            {
-                if (child != null && child.name == "GODSPLITTER")
-                {
-                    GameObject existing = child.gameObject;
-                    if (existing.GetComponent<GodsplitterWeapon>() == null)
-                        existing.AddComponent<GodsplitterWeapon>();
-                    if (!guns.slot6.Contains(existing)) guns.slot6.Add(existing);
-                    Log.LogInfo("Found existing GODSPLITTER object and ensured it is in slot6.");
-                    return;
-                }
-            }
-
-            GameObject sword = new GameObject("GODSPLITTER");
-            sword.transform.SetParent(guns.transform, false);
-            sword.AddComponent<GodsplitterWeapon>();
-            guns.slot6.Add(sword);
-            Log.LogInfo("Created GODSPLITTER object and added it to slot6.");
+            if (harmony != null)
+                harmony.UnpatchSelf();
+            GabrielArmController.Cleanup();
         }
     }
 }
