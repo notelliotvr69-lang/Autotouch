@@ -27,6 +27,7 @@ jobs:
             @{ Name = "Assembly-CSharp.dll"; Destination = ".build/ULTRAKILL_Data/Managed/Assembly-CSharp.dll" },
             @{ Name = "UnityEngine.dll"; Destination = ".build/ULTRAKILL_Data/Managed/UnityEngine.dll" },
             @{ Name = "UnityEngine.CoreModule.dll"; Destination = ".build/ULTRAKILL_Data/Managed/UnityEngine.CoreModule.dll" },
+            @{ Name = "UnityEngine.PhysicsModule.dll"; Destination = ".build/ULTRAKILL_Data/Managed/UnityEngine.PhysicsModule.dll" },
             @{ Name = "BepInEx.dll"; Destination = ".build/BepInEx/core/BepInEx.dll" },
             @{ Name = "0Harmony.dll"; Destination = ".build/BepInEx/core/0Harmony.dll" }
           )
@@ -60,7 +61,7 @@ jobs:
           }
 
           if ($null -eq $selected) {
-            throw "Neither reference archive contains all five required DLLs: Assembly-CSharp.dll, UnityEngine.dll, UnityEngine.CoreModule.dll, BepInEx.dll, and 0Harmony.dll."
+            throw "Neither reference archive contains all six required DLLs: Assembly-CSharp.dll, UnityEngine.dll, UnityEngine.CoreModule.dll, UnityEngine.PhysicsModule.dll, BepInEx.dll, and 0Harmony.dll."
           }
 
           foreach ($file in $required) {
