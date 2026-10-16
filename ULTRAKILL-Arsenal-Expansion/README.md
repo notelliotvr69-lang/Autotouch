@@ -1,25 +1,31 @@
 # ULTRAKILL Arsenal Expansion
 
-A BepInEx 5 x64 plugin project for making the existing Developer Museum weapons available during regular levels.
+BepInEx 5 x64 plugin project. The current experimental build adds the existing Museum weapons and a custom **GODSPLITTER** weapon prototype to the extra weapon slot.
 
-## Intended behavior
+## GODSPLITTER concept
 
-- Automatically adds the existing **Beamcutter** and **Black Hole Cannon** prefabs to ULTRAKILL's extra weapon slot when a gameplay scene loads.
-- Does **not** register a cheat in the Cheats menu or require selecting an in-game cheat.
-- Uses the existing game prefabs and weapon behavior rather than recreating their projectiles from scratch.
+A weapon inspired by Gabriel's gold, white, silver, and blue divine aesthetic. It is available through the mod's extra weapon slot and does not require defeating Gabriel.
+
+- **Primary fire — Divine Edge:** fast sword slash with a short recovery.
+- **Secondary fire — SMITE:** right-click calls a golden light strike onto the point under the crosshair, with a cooldown.
+- **Kill afterimage:** when the game exposes enemy health in a readable way and the damage call succeeds, a sword kill attempts one golden follow-up slash against a nearby enemy.
+- **Story idea:** an alternate mod encounter has Gabriel lose his sword arm; he later returns with a replacement. This is a mod concept, not original-game canon.
 
 ## Build
 
-The GitHub Actions workflow can be started manually from the Actions tab. It compiles against the game's Managed assemblies and BepInEx core DLLs supplied to the runner. Configure the repository variable ULTRAKILL_REFERENCE_BUNDLE_URL to a ZIP containing:
-- ULTRAKILL_Data/Managed/Assembly-CSharp.dll
-- the game's Unity Managed DLLs
-- BepInEx/core/BepInEx.dll
-- BepInEx/core/0Harmony.dll
+The GitHub Actions workflow can be started manually from the Actions tab. It compiles against game Managed assemblies and BepInEx core DLLs supplied in `UKReferences.zip` at the repository root. The archive must contain:
+- `Assembly-CSharp.dll`
+- `UnityEngine.dll`
+- `UnityEngine.CoreModule.dll`
+- `BepInEx.dll`
+- `0Harmony.dll`
 
 Do not commit or publicly redistribute the game's assemblies.
 
-## Status and testing
+## Important prototype status
 
-The plugin now contains an initial automatic weapon-slot implementation based on the public Museum Weapons Cheat source's prefab paths and slot registration approach. It has **not yet been compiled or tested in-game**. Game updates can change APIs or prefab paths, and the extra slot's input/display behavior needs in-game verification. Do not treat it as a confirmed working build until GitHub Actions succeeds and the plugin is tested.
+**This is an experimental first pass, not a verified release.** The sword model and beam are generated from simple Unity primitives at runtime. Enemy damage is attempted through reflection because ULTRAKILL's internal damage API is version-sensitive. The custom object is registered into the existing extra weapon list, but the slot's display, selection/holstering behavior, damage signatures, and visuals need an actual compile and in-game test. Expect bugs; keep a backup of your current plugin DLL.
 
-The current approach does not register or invoke CheatsManager at all. This does not guarantee anything about achievement/leaderboard eligibility, which can depend on ULTRAKILL and other installed mods.
+The build workflow packages its DLL as a downloadable Actions artifact. A successful compile does not prove the weapon works correctly in-game.
+
+The plugin does not register or invoke CheatsManager. That does not guarantee anything about achievement or leaderboard eligibility; this can depend on ULTRAKILL and other installed mods.
