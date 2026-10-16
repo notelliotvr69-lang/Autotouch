@@ -2,25 +2,25 @@
 
 A BepInEx 5 x64 plugin project. The rejected Momentum Overdrive mechanic has been removed.
 
-## Reclaimer arm — in progress
+## Reclaimer mechanics — prototype
 
-Target: a third selectable arm with yellow/gold plating, based on the reference image created for this project.
+The first Reclaimer gameplay prototype is now implemented as Harmony hooks on the existing punch/parry methods, temporarily using the current arm while custom arm registration remains a separate task.
 
-Mechanics:
-- Catch and store one enemy projectile during a successful parry.
-- Launch the stored projectile on the next punch.
-- Punch normally when no projectile is stored.
-- Clear the stored projectile after release; allow the next catch.
+- On a successful `Punch.ParryProjectile`, store one parried projectile.
+- Keep the stored projectile inactive while it is held.
+- On the next `Punch.PunchStart`, reposition and reactivate the stored projectile in front of the player, aiming toward the current camera/target.
+- Additional parries do not overwrite a projectile already being held.
+- After release, the slot is empty and can catch another projectile.
 
-## Implementation research
+This is a mechanics prototype, not a finished selectable arm. It reuses the parried projectile object; different projectile types may behave differently when reactivated, and in-game testing is needed to verify damage, movement, and lifetime. It is temporarily hooked to the existing arm's parry/punch methods and is not yet restricted to a custom Reclaimer arm.
 
-The public MIT-licensed [ULTRAKILL Custom Arms proof of concept](https://github.com/Temperz87/Ultrakill-Custom-Arms-Proof-Of-Concept) demonstrates the relevant integration points: a custom-arm registry through `FistControl.ArmChange`, a parry callback from `Punch.ParryProjectile`, and a punch callback from `Punch.PunchStart`. Its vortex-arm example also demonstrates storing projectile GameObjects and releasing them on a later swing.
+## Arm/model work — not implemented yet
 
-That proof of concept is built around the older UMM framework and cannot simply be dropped into this standalone BepInEx project. The Reclaimer needs a compatible arm-registration path before the capture/release mechanic can be honestly described as implemented. The existing project currently does not register a third arm or implement Reclaimer capture/release.
+The target remains a third selectable arm with yellow/gold plating, based on the reference image created for this project. Custom arm registration and the 3D model/animation still need to be integrated.
 
 ## Build and install
 
-The GitHub Actions workflow builds against game and BepInEx reference DLLs supplied in one of the repository's reference ZIP archives. A successful plugin build alone does not prove arm selection, visuals, projectile capture, or projectile release.
+The GitHub Actions workflow builds against game and BepInEx reference DLLs supplied in one of the repository's reference ZIP archives. A successful plugin build alone does not prove the projectile loop behaves correctly in-game.
 
 ## Testing status
 
