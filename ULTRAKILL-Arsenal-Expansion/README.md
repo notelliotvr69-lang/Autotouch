@@ -2,14 +2,17 @@
 
 BepInEx 5 x64 plugin project for ULTRAKILL.
 
-## Current focus: Gabriel's Arm
+## Equipment names and order
 
-The current development step is the arm slot only. The separate GODSPLITTER weapon is intentionally not registered while the arm is being built.
+- **GODSPLITTER** is Gabriel's actual arm, equipped in V1's arm slot like the arm taken from V2. It is not a Gabriel-inspired gauntlet or the sword.
+- **DIVINE JUDGEMENT** is Gabriel's divine-light sword, a separate selectable weapon-slot item planned after GODSPLITTER.
+- Later, while GODSPLITTER is equipped, its secondary action will throw DIVINE JUDGEMENT. The sword should damage on the outbound and return passes and return after about 1–2 seconds. Only GODSPLITTER may override gun secondary fire; all other arm/gun behavior must remain unchanged.
+- The arm should use ULTRAKILL's native punch/combo behavior.
+- No Museum weapons. GODSPLITTER must not require killing Gabriel to obtain.
 
-Planned arm design:
-- White/silver armor with gold divine detailing.
-- A fast, combo-friendly primary punch using the game's actual arm/punch system.
-- A later arm-specific secondary action for throwing Gabriel's divine-light sword. That input must only be intercepted while Gabriel's Arm is equipped; all other arms and guns must keep their normal behavior.
+## Current prototype status
+
+The branch has an experimental arm-cycle hook, but **Gabriel's actual arm model/rig is not attached yet**. The substitute primitive gauntlet has been removed rather than misrepresenting it as the real arm. The next implementation step is locating/loading the game's actual Gabriel model asset and attaching the correct animated arm to V1's arm holder. A successful compile alone does not prove in-game behavior.
 
 ## Build
 
@@ -23,9 +26,3 @@ The GitHub Actions workflow compiles against game Managed assemblies and BepInEx
 - `0Harmony.dll`
 
 Do not commit or publicly redistribute the game's assemblies.
-
-## Prototype status
-
-This is an experimental development build, not a verified release. The arm integration and visual overlay must still be tested in-game. A successful compile alone does not prove the arm appears, cycles correctly, or has the intended punch feel.
-
-The separate GODSPLITTER weapon is deferred until the arm slot is working. No Museum weapons are included in this project scope.
