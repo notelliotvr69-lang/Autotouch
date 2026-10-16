@@ -8,7 +8,7 @@ using UnityEngine.SceneManagement;
 
 namespace ArsenalExpansion
 {
-    [BepInPlugin("notelliotvr69.arsenalexpansion030", "Arsenal Expansion 0.3.0", "0.3.0")]
+    [BepInPlugin("notelliotvr69.arsenalexpansion030", "Arsenal Expansion 0.4.0 - GODSPLITTER", "0.4.0")]
     public sealed class Plugin : BaseUnityPlugin
     {
         internal static ManualLogSource Log;
@@ -18,7 +18,7 @@ namespace ArsenalExpansion
         private void Awake()
         {
             Log = Logger;
-            Log.LogInfo("Arsenal Expansion 0.3.0 loaded. Waiting for gameplay weapon manager.");
+            Log.LogInfo("Arsenal Expansion 0.4.0 loaded. GODSPLITTER prototype will be added during gameplay.");
             StartCoroutine(WatchForGameplay());
         }
 
@@ -27,34 +27,52 @@ namespace ArsenalExpansion
             while (!weaponsAdded)
             {
                 yield return new WaitForSeconds(1f);
-
                 string sceneName = SceneManager.GetActiveScene().name;
                 if (sceneName == "Main Menu" || sceneName == "Intro" || addingWeapons)
                     continue;
 
                 GunControl guns = MonoSingleton<GunControl>.Instance;
-                if (guns == null)
-                    continue;
+                if (guns == null) continue;
 
                 addingWeapons = true;
-                Log.LogInfo("Gameplay scene detected (" + sceneName + "); attempting to add museum weapons.");
                 try
                 {
                     AddWeapon("Assets/Prefabs/Weapons/Old/Beamcutter Blue.prefab", "Beamcutter Blue", guns);
                     AddWeapon("Assets/Prefabs/Weapons/Old/Black Hole Cannon.prefab", "Black Hole Cannon", guns);
+                    AddGodsplitter(guns);
                     guns.UpdateWeaponList();
                     weaponsAdded = true;
-                    Log.LogInfo("Added Beamcutter and Black Hole Cannon to extra weapon slot.");
+                    Log.LogInfo("Added museum weapons and GODSPLITTER to extra weapon slot.");
                 }
                 catch (Exception ex)
                 {
-                    Log.LogError("Could not add museum weapons; will retry: " + ex);
+                    Log.LogError("Could not finish weapon registration; will retry: " + ex);
                 }
                 finally
                 {
                     addingWeapons = false;
                 }
             }
+        }
+
+        private static void AddGodsplitter(GunControl guns)
+        {
+            foreach (Transform child in guns.transform)
+            {
+                if (child != null && child.name == "GODSPLITTER")
+                {
+                    GameObject existing = child.gameObject;
+                    if (existing.GetComponent<GodsplitterWeapon>() == null)
+                        existing.AddComponent<GodsplitterWeapon>();
+                    if (!guns.slot6.Contains(existing)) guns.slot6.Add(existing);
+                    return;
+                }
+            }
+
+            GameObject sword = new GameObject("GODSPLITTER");
+            sword.transform.SetParent(guns.transform, false);
+            sword.AddComponent<GodsplitterWeapon>();
+            guns.slot6.Add(sword);
         }
 
         private static void AddWeapon(string prefabPath, string weaponName, GunControl guns)
