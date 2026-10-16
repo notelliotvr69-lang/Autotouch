@@ -16,7 +16,8 @@ namespace ArsenalExpansion
             try
             {
                 harmony.PatchAll(typeof(Plugin).Assembly);
-                Logger.LogInfo("Arsenal Expansion loaded. Reclaimer prototype: parry a projectile with Feedbacker to store it, then punch with Knuckleblaster to release it.");
+                UnlockSpecialWeaponVariants();
+                Logger.LogInfo("Arsenal Expansion loaded. Special weapon variants enabled: Slab Revolver, Jackhammer, and Sawblade Launcher. Reclaimer prototype: parry with Feedbacker, release with Knuckleblaster.");
             }
             catch (Exception ex)
             {
@@ -34,8 +35,29 @@ namespace ArsenalExpansion
             }
         }
 
-        // Existing gear-check shortcut retained separately from the Reclaimer mechanics.
-        // This does not guarantee that all weapon variants are permanently unlocked.
+        // Persist the three alternate weapon unlocks and select their alternate forms.
+        // Gear names come from GameProgressMoneyAndGear; weapon.* preferences control selection.
+        private void UnlockSpecialWeaponVariants()
+        {
+            try
+            {
+                GameProgressSaver.AddGear("revalt");
+                GameProgressSaver.AddGear("shoalt");
+                GameProgressSaver.AddGear("naialt");
+
+                MonoSingleton<PrefsManager>.Instance.SetInt("weapon.rev0", 2);
+                MonoSingleton<PrefsManager>.Instance.SetInt("weapon.sho0", 2);
+                MonoSingleton<PrefsManager>.Instance.SetInt("weapon.nai0", 2);
+
+                Logger.LogInfo("Saved special variant unlocks and selected alternate Revolver, Shotgun, and Nailgun forms.");
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning("Could not persist special weapon variant unlocks yet: " + ex.Message);
+            }
+        }
+
+        // Gear-check shortcut also exposes gear to shop/variant checks while the mod is active.
         [HarmonyPatch(typeof(GameProgressSaver), nameof(GameProgressSaver.CheckGear))]
         private static class UnlockAllGear
         {
