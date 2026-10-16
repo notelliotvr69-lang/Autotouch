@@ -5,7 +5,8 @@ on:
   push:
     paths:
       - "ULTRAKILL-Arsenal-Expansion/**"
-      - "UKReferences.zip"
+      - "UKReferenceZ.zip"
+      - "ULTRAKILL referenceZ 2.zip"
       - ".github/workflows/ultrakill-build.yml"
 
 jobs:
@@ -22,14 +23,6 @@ jobs:
       - name: Prepare game reference DLLs
         shell: pwsh
         run: |
-          if (!(Test-Path "UKReferences.zip")) {
-            throw "UKReferences.zip is missing from the repository root."
-          }
-
-          Expand-Archive -LiteralPath "UKReferences.zip" -DestinationPath ".reference-extract" -Force
-          New-Item -ItemType Directory -Force -Path ".build/ULTRAKILL_Data/Managed" | Out-Null
-          New-Item -ItemType Directory -Force -Path ".build/BepInEx/core" | Out-Null
-
           $required = @(
             @{ Name = "Assembly-CSharp.dll"; Destination = ".build/ULTRAKILL_Data/Managed/Assembly-CSharp.dll" },
             @{ Name = "UnityEngine.dll"; Destination = ".build/ULTRAKILL_Data/Managed/UnityEngine.dll" },
@@ -38,12 +31,43 @@ jobs:
             @{ Name = "0Harmony.dll"; Destination = ".build/BepInEx/core/0Harmony.dll" }
           )
 
-          foreach ($file in $required) {
-            $matches = @(Get-ChildItem ".reference-extract" -Recurse -File -Filter $file.Name)
-            if ($matches.Count -eq 0) {
-              throw "UKReferences.zip is missing $($file.Name). Make sure all five DLL files are inside the ZIP."
+          $archives = @("UKReferenceZ.zip", "ULTRAKILL referenceZ 2.zip") | Where-Object { Test-Path $_ }
+          if ($archives.Count -eq 0) {
+            throw "No reference archive found. Expected UKReferenceZ.zip or ULTRAKILL referenceZ 2.zip."
+          }
+
+          $selected = $null
+          foreach ($archive in $archives) {
+            $extractDir = Join-Path ".reference-extract" ([IO.Path]::GetFileNameWithoutExtension($archive))
+            Remove-Item -LiteralPath $extractDir -Recurse -Force -ErrorAction SilentlyContinue
+            New-Item -ItemType Directory -Force -Path $extractDir | Out-Null
+            Expand-Archive -LiteralPath $archive -DestinationPath $extractDir -Force
+
+            $allPresent = $true
+            foreach ($file in $required) {
+              if (@(Get-ChildItem $extractDir -Recurse -File -Filter $file.Name).Count -eq 0) {
+                $allPresent = $false
+                break
+              }
             }
-            Copy-Item -LiteralPath $matches[0].FullName -Destination $file.Destination -Force
+
+            if ($allPresent) {
+              $selected = $extractDir
+              Write-Host "Using reference archive: $archive"
+              break
+            }
+            Write-Host "Archive does not contain all required DLLs: $archive"
+          }
+
+          if ($null -eq $selected) {
+            throw "Neither reference archive contains all five required DLLs: Assembly-CSharp.dll, UnityEngine.dll, UnityEngine.CoreModule.dll, BepInEx.dll, and 0Harmony.dll."
+          }
+
+          foreach ($file in $required) {
+            $match = Get-ChildItem $selected -Recurse -File -Filter $file.Name | Select-Object -First 1
+            $destinationDir = Split-Path $file.Destination -Parent
+            New-Item -ItemType Directory -Force -Path $destinationDir | Out-Null
+            Copy-Item -LiteralPath $match.FullName -Destination $file.Destination -Force
             Write-Host "Prepared $($file.Name)"
           }
 
@@ -54,7 +78,7 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path out | Out-Null
-          Copy-Item "ULTRAKILL-Arsenal-Expansion/bin/Release/netstandard2.1/ArsenalExpansion.dll" "out/ArsenalExpansion.dll"
+          Copy-Item "ULTRAKILL-Arsenal-Expansion/bin/Release/netstandard2.1/ArsenalExpansion-v0.3.0.dll" "out/ArsenalExpansion.dll"
           Copy-Item "ULTRAKILL-Arsenal-Expansion/README.md" "out/README.md"
           Compress-Archive -Path out/* -DestinationPath ArsenalExpansion-v0.3.0-build.zip -Force
 
@@ -62,4 +86,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ArsenalExpansion-v0.3.0-build
-          path: ArsenalExpansion-build.zip
+          path: ArsenalExpansion-v0.3.0-build.zip
