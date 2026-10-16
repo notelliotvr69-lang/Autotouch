@@ -1,8 +1,16 @@
 # Weapon design backlog
 
-These are concepts, not implemented weapons yet.
+Requested features in this file are design targets, not implemented yet.
 
-## Dual Revolvers
+## Dual Revolvers (requested for v0.3.x)
+- Prototype as a selectable weapon using two existing revolver models, with synchronized left/right firing and a distinct weapon identity.
+- Do not claim implemented until firing, ammo, switching, and animations work in-game.
+
+## New Arm (requested for v0.3.x)
+- New arm concept: **Rift Arm** — a short-range pull/punch that yanks light enemies or props toward V1, with a cooldown and no effect on bosses.
+- Needs its own model/animation or a deliberate placeholder, plus input binding and gameplay testing.
+
+## Original Dual Revolvers concept
 - Two-hand firing pattern with a deliberate ammo/reload cadence.
 - Must be balanced against the existing Marksman and Sharpshooter revolvers.
 
