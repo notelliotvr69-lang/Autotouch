@@ -37,21 +37,39 @@ namespace ArsenalExpansion
                 addingWeapons = true;
                 try
                 {
-                    AddWeapon("Assets/Prefabs/Weapons/Old/Beamcutter Blue.prefab", "Beamcutter Blue", guns);
-                    AddWeapon("Assets/Prefabs/Weapons/Old/Black Hole Cannon.prefab", "Black Hole Cannon", guns);
+                    // Register GODSPLITTER independently: optional Museum prefab failures must not block it.
                     AddGodsplitter(guns);
                     guns.UpdateWeaponList();
+                    Log.LogInfo("GODSPLITTER registration attempted. slot6 count: " + guns.slot6.Count);
+
+                    TryAddMuseumWeapon("Assets/Prefabs/Weapons/Old/Beamcutter Blue.prefab", "Beamcutter Blue", guns);
+                    TryAddMuseumWeapon("Assets/Prefabs/Weapons/Old/Black Hole Cannon.prefab", "Black Hole Cannon", guns);
+
+                    guns.UpdateWeaponList();
                     weaponsAdded = true;
-                    Log.LogInfo("Added museum weapons and GODSPLITTER to extra weapon slot.");
+                    Log.LogInfo("Weapon registration pass completed.");
                 }
                 catch (Exception ex)
                 {
-                    Log.LogError("Could not finish weapon registration; will retry: " + ex);
+                    Log.LogError("GODSPLITTER registration failed; will retry: " + ex);
                 }
                 finally
                 {
                     addingWeapons = false;
                 }
+            }
+        }
+
+        private static void TryAddMuseumWeapon(string prefabPath, string weaponName, GunControl guns)
+        {
+            try
+            {
+                AddWeapon(prefabPath, weaponName, guns);
+                Plugin.Log.LogInfo("Museum weapon registered or already present: " + weaponName);
+            }
+            catch (Exception ex)
+            {
+                Plugin.Log.LogWarning("Optional Museum weapon skipped (" + weaponName + "): " + ex.Message);
             }
         }
 
@@ -65,6 +83,7 @@ namespace ArsenalExpansion
                     if (existing.GetComponent<GodsplitterWeapon>() == null)
                         existing.AddComponent<GodsplitterWeapon>();
                     if (!guns.slot6.Contains(existing)) guns.slot6.Add(existing);
+                    Log.LogInfo("Found existing GODSPLITTER object and ensured it is in slot6.");
                     return;
                 }
             }
@@ -73,6 +92,7 @@ namespace ArsenalExpansion
             sword.transform.SetParent(guns.transform, false);
             sword.AddComponent<GodsplitterWeapon>();
             guns.slot6.Add(sword);
+            Log.LogInfo("Created GODSPLITTER object and added it to slot6.");
         }
 
         private static void AddWeapon(string prefabPath, string weaponName, GunControl guns)
