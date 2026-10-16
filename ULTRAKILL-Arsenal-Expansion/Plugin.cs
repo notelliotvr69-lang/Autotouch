@@ -7,7 +7,7 @@ using UnityEngine.SceneManagement;
 
 namespace ArsenalExpansion
 {
-    [BepInPlugin("notelliotvr69.arsenalexpansion030", "Arsenal Expansion - Gabriel's Arm", "0.5.0")]
+    [BepInPlugin("notelliotvr69.arsenalexpansion030", "Arsenal Expansion - GODSPLITTER Arm", "0.5.0")]
     public sealed class Plugin : BaseUnityPlugin
     {
         internal static BepInEx.Logging.ManualLogSource Log;
@@ -16,9 +16,9 @@ namespace ArsenalExpansion
         private void Awake()
         {
             Log = Logger;
-            harmony = new Harmony("notelliotvr69.arsenalexpansion.gabrielsarm");
+            harmony = new Harmony("notelliotvr69.arsenalexpansion.godsplitterarm");
             harmony.PatchAll();
-            Log.LogInfo("Arsenal Expansion loaded. Gabriel's Arm prototype enabled; weapon work is intentionally paused.");
+            Log.LogInfo("Arsenal Expansion loaded. GODSPLITTER arm-slot prototype enabled; actual Gabriel arm model is not attached yet.");
             StartCoroutine(WaitForGameplay());
         }
 
@@ -34,7 +34,7 @@ namespace ArsenalExpansion
                 FistControl fists = MonoSingleton<FistControl>.Instance;
                 if (fists != null)
                 {
-                    GabrielArmController.TryInitialize();
+                    GodsplitterArmController.TryInitialize();
                     yield break;
                 }
             }
@@ -44,7 +44,7 @@ namespace ArsenalExpansion
         {
             if (harmony != null)
                 harmony.UnpatchSelf();
-            GabrielArmController.Cleanup();
+            GodsplitterArmController.Cleanup();
         }
     }
 }
