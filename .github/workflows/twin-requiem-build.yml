@@ -3,6 +3,12 @@ name: TWIN REQUIEM build validation
 permissions:
   contents: read
 
+# Push commits may arrive faster than Windows runners can build. Keep only the newest
+# validation run so intermediate commits do not leave misleading red builds behind.
+concurrency:
+  group: twin-requiem-build-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   workflow_dispatch:
   push:
