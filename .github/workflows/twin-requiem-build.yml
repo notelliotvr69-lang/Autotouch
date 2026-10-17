@@ -1,0 +1,80 @@
+name: TWIN REQUIEM build
+
+permissions:
+  contents: write
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "TwinRequiem/**"
+      - "UKReferenceZ.zip"
+      - "ULTRAKILL referenceZ 2.zip"
+      - ".github/workflows/twin-requiem-build.yml"
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "8.0.x"
+      - name: Prepare game reference DLLs
+        shell: pwsh
+        run: |
+          $required = @(
+            @{ Name = "Assembly-CSharp.dll"; Destination = ".build/ULTRAKILL_Data/Managed/Assembly-CSharp.dll" },
+            @{ Name = "UnityEngine.dll"; Destination = ".build/ULTRAKILL_Data/Managed/UnityEngine.dll" },
+            @{ Name = "UnityEngine.CoreModule.dll"; Destination = ".build/ULTRAKILL_Data/Managed/UnityEngine.CoreModule.dll" },
+            @{ Name = "BepInEx.dll"; Destination = ".build/BepInEx/core/BepInEx.dll" },
+            @{ Name = "0Harmony.dll"; Destination = ".build/BepInEx/core/0Harmony.dll" }
+          )
+          $archives = @("UKReferenceZ.zip", "ULTRAKILL referenceZ 2.zip") | Where-Object { Test-Path $_ }
+          if ($archives.Count -eq 0) { throw "No reference archive found. Expected UKReferenceZ.zip or ULTRAKILL referenceZ 2.zip." }
+          $selected = $null
+          foreach ($archive in $archives) {
+            $extractDir = Join-Path ".reference-extract" ([IO.Path]::GetFileNameWithoutExtension($archive))
+            Remove-Item -LiteralPath $extractDir -Recurse -Force -ErrorAction SilentlyContinue
+            New-Item -ItemType Directory -Force -Path $extractDir | Out-Null
+            Expand-Archive -LiteralPath $archive -DestinationPath $extractDir -Force
+            $allPresent = $true
+            foreach ($file in $required) { if (@(Get-ChildItem $extractDir -Recurse -File -Filter $file.Name).Count -eq 0) { $allPresent = $false; break } }
+            if ($allPresent) { $selected = $extractDir; Write-Host "Using reference archive: $archive"; break }
+            Write-Host "Archive missing one or more required DLLs: $archive"
+          }
+          if ($null -eq $selected) { throw "Neither reference archive contains all required DLLs." }
+          foreach ($file in $required) {
+            $match = Get-ChildItem $selected -Recurse -File -Filter $file.Name | Select-Object -First 1
+            $destinationDir = Split-Path $file.Destination -Parent
+            New-Item -ItemType Directory -Force -Path $destinationDir | Out-Null
+            Copy-Item -LiteralPath $match.FullName -Destination $file.Destination -Force
+          }
+      - name: Build plugin
+        run: dotnet build TwinRequiem/TwinRequiem.csproj --configuration Release
+      - name: Prepare direct DLL
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path out | Out-Null
+          Copy-Item "TwinRequiem/bin/Release/netstandard2.1/TwinRequiem.dll" "out/TwinRequiem.dll"
+      - name: Upload DLL artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: TWIN-REQUIEM-DLL
+          path: out/TwinRequiem.dll
+          if-no-files-found: error
+          retention-days: 30
+      - name: Publish direct DLL download
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "twin-requiem-latest"
+          $asset = "out/TwinRequiem.dll"
+          gh release view $tag --json tagName 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $tag $asset --clobber
+          } else {
+            gh release create $tag $asset --title "TWIN REQUIEM (latest build)" --notes "TWIN REQUIEM mechanics foundation prototype. Custom weapon slot and dual-model gameplay are not implemented yet."
+          }
