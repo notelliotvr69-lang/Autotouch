@@ -1,18 +1,24 @@
-name: TWIN REQUIEM runtime API inspection
+name: TWIN REQUIEM runtime DLL build
 
 permissions:
   contents: read
+
+concurrency:
+  group: twin-requiem-runtime-${{ github.ref }}
+  cancel-in-progress: true
 
 on:
   workflow_dispatch:
   push:
     paths:
-      - "TwinRequiem.Runtime.Inspector/**"
+      - "TwinRequiem/**"
+      - "TwinRequiem.Runtime/**"
       - "ULTRAKILL referenceZ 3.zip"
+      - "UKReferenceZ.zip"
       - ".github/workflows/twin-requiem-runtime-inspect.yml"
 
 jobs:
-  inspect:
+  build-runtime:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -20,23 +26,42 @@ jobs:
         uses: actions/setup-dotnet@v5
         with:
           dotnet-version: "8.0.x"
-      - name: Extract Assembly-CSharp reference
+      - name: Prepare game reference DLLs
         shell: pwsh
         run: |
-          $archive = "ULTRAKILL referenceZ 3.zip"
-          if (!(Test-Path $archive)) { throw "Missing $archive" }
-          New-Item -ItemType Directory -Force -Path ".reference-extract" | Out-Null
-          Expand-Archive -LiteralPath $archive -DestinationPath ".reference-extract" -Force
-          $assembly = Get-ChildItem ".reference-extract" -Recurse -File -Filter "Assembly-CSharp.dll" | Select-Object -First 1
-          if ($null -eq $assembly) { throw "Assembly-CSharp.dll was not found in referenceZ 3." }
-          New-Item -ItemType Directory -Force -Path ".build/ULTRAKILL_Data/Managed" | Out-Null
-          Copy-Item -LiteralPath $assembly.FullName -Destination ".build/ULTRAKILL_Data/Managed/Assembly-CSharp.dll" -Force
-      - name: Inspect weapon and firing APIs
-        run: dotnet run --project TwinRequiem.Runtime.Inspector/Inspector.csproj --configuration Release -- ".build/ULTRAKILL_Data/Managed/Assembly-CSharp.dll"
-      - name: Upload API inspection report
+          $required = @(
+            @{ Name = "Assembly-CSharp.dll"; Destination = ".build/ULTRAKILL_Data/Managed/Assembly-CSharp.dll" },
+            @{ Name = "UnityEngine.dll"; Destination = ".build/ULTRAKILL_Data/Managed/UnityEngine.dll" },
+            @{ Name = "UnityEngine.CoreModule.dll"; Destination = ".build/ULTRAKILL_Data/Managed/UnityEngine.CoreModule.dll" },
+            @{ Name = "BepInEx.dll"; Destination = ".build/BepInEx/core/BepInEx.dll" },
+            @{ Name = "0Harmony.dll"; Destination = ".build/BepInEx/core/0Harmony.dll" }
+          )
+          $archives = @("ULTRAKILL referenceZ 3.zip", "UKReferenceZ.zip") | Where-Object { Test-Path $_ }
+          $selected = $null
+          foreach ($archive in $archives) {
+            $extractDir = Join-Path ".reference-extract" ([IO.Path]::GetFileNameWithoutExtension($archive))
+            Remove-Item -LiteralPath $extractDir -Recurse -Force -ErrorAction SilentlyContinue
+            New-Item -ItemType Directory -Force -Path $extractDir | Out-Null
+            Expand-Archive -LiteralPath $archive -DestinationPath $extractDir -Force
+            $allPresent = $true
+            foreach ($file in $required) { if (@(Get-ChildItem $extractDir -Recurse -File -Filter $file.Name).Count -eq 0) { $allPresent = $false; break } }
+            if ($allPresent) { $selected = $extractDir; Write-Host "Using reference archive: $archive"; break }
+          }
+          if ($null -eq $selected) { throw "Neither reference archive contains all required DLLs." }
+          foreach ($file in $required) {
+            $match = Get-ChildItem $selected -Recurse -File -Filter $file.Name | Select-Object -First 1
+            $destinationDir = Split-Path $file.Destination -Parent
+            New-Item -ItemType Directory -Force -Path $destinationDir | Out-Null
+            Copy-Item -LiteralPath $match.FullName -Destination $file.Destination -Force
+          }
+      - name: Build actual runtime plugin DLL
+        run: dotnet build TwinRequiem.Runtime/TwinRequiem.Runtime.csproj --configuration Release
+      - name: Run mechanics regression tests
+        run: dotnet run --project TwinRequiem.Tests/TwinRequiem.Tests.csproj --configuration Release
+      - name: Upload runtime DLL
         uses: actions/upload-artifact@v4
         with:
-          name: TWIN-REQUIEM-runtime-api-report
-          path: weapon-api-report.txt
+          name: TwinRequiem.Runtime-DLL
+          path: TwinRequiem.Runtime/bin/Release/netstandard2.1/TwinRequiem.Runtime.dll
           if-no-files-found: error
           retention-days: 14
