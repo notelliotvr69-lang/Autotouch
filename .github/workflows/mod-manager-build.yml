@@ -23,7 +23,7 @@ jobs:
       - name: Prepare reference DLLs
         shell: pwsh
         run: |
-          $required = @("Assembly-CSharp.dll","UnityEngine.dll","UnityEngine.CoreModule.dll","UnityEngine.IMGUIModule.dll","BepInEx.dll","0Harmony.dll")
+          $required = @("Assembly-CSharp.dll","UnityEngine.dll","UnityEngine.CoreModule.dll","BepInEx.dll","0Harmony.dll")
           $archives = @("UKReferenceZ.zip","ULTRAKILL referenceZ 2.zip") | Where-Object { Test-Path $_ }
           if ($archives.Count -eq 0) { throw "No reference archives were found in the repository." }
           $extractRoot = ".reference-extract"
