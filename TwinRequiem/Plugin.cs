@@ -7,7 +7,7 @@ using UnityEngine;
 
 namespace TwinRequiem
 {
-    [BepInPlugin("notelliotvr69.twinrequiem", "TWIN REQUIEM", "0.2.0")]
+    [BepInPlugin("notelliotvr69.twinrequiem", "TWIN REQUIEM", "0.3.0")]
     public sealed class Plugin : BaseUnityPlugin
     {
         internal static Plugin Instance;
