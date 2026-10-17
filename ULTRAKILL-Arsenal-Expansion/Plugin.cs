@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace ArsenalExpansion
 {
-    [BepInPlugin("notelliotvr69.arsenalexpansion030", "ULTRAKILL Arsenal Expansion", "0.7.0")]
+    [BepInPlugin("notelliotvr69.reclaimer", "ULTRAKILL Reclaimer", "0.7.0")]
     public sealed class Plugin : BaseUnityPlugin
     {
         private Harmony harmony;
@@ -17,7 +17,7 @@ namespace ArsenalExpansion
             {
                 harmony.PatchAll(typeof(Plugin).Assembly);
                 UnlockSpecialWeaponVariants();
-                Logger.LogInfo("Arsenal Expansion loaded. Special weapon variants enabled: Slab Revolver, Jackhammer, and Sawblade Launcher. Reclaimer arm slot prototype enabled: gold placeholder; parry with Feedbacker, release with Knuckleblaster.");
+                Logger.LogInfo("Reclaimer loaded. Special weapon variants enabled: Slab Revolver, Jackhammer, and Sawblade Launcher. Reclaimer arm slot prototype enabled: red placeholder; parry with Feedbacker, release with Knuckleblaster.");
             }
             catch (Exception ex)
             {
@@ -70,7 +70,7 @@ namespace ArsenalExpansion
     }
 
     /// <summary>
-    /// Adds one selectable gold Reclaimer slot using the game's stock arm model as a temporary
+    /// Adds one selectable red Reclaimer slot using the game's stock arm model as a temporary
     /// placeholder. This is an adaptation of the public custom-arm proof of concept's
     /// ArmChange variation hook, without its UMM dependency.
     /// </summary>
@@ -126,7 +126,7 @@ namespace ArsenalExpansion
                             originalIconColor = __instance.fistIcon.color;
                             savedIconColor = true;
                         }
-                        __instance.fistIcon.color = new Color32(225, 183, 62, 255);
+                        __instance.fistIcon.color = new Color32(190, 35, 45, 255);
                     }
 
                     // No custom mesh is required yet: keep the current stock arm as a placeholder.
