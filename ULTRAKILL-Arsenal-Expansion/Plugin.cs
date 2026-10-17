@@ -17,7 +17,7 @@ namespace ArsenalExpansion
             {
                 harmony.PatchAll(typeof(Plugin).Assembly);
                 UnlockSpecialWeaponVariants();
-                Logger.LogInfo("Arsenal Expansion loaded. Special weapon variants enabled: Slab Revolver, Jackhammer, and Sawblade Launcher. Reclaimer prototype: parry with Feedbacker, release with Knuckleblaster.");
+                Logger.LogInfo("Arsenal Expansion loaded. Special weapon variants enabled: Slab Revolver, Jackhammer, and Sawblade Launcher. Reclaimer arm slot prototype enabled: gold placeholder; parry with Feedbacker, release with Knuckleblaster.");
             }
             catch (Exception ex)
             {
@@ -65,6 +65,84 @@ namespace ArsenalExpansion
             {
                 __result = 1;
                 return false;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Adds one selectable gold Reclaimer slot using the game's stock arm model as a temporary
+    /// placeholder. This is an adaptation of the public custom-arm proof of concept's
+    /// ArmChange variation hook, without its UMM dependency.
+    /// </summary>
+    internal static class ReclaimerArmSlot
+    {
+        private static bool slotSelected;
+        private static int variation = -1;
+        private static Color originalIconColor = Color.white;
+        private static bool savedIconColor;
+
+        internal static bool IsSelected => slotSelected;
+
+        [HarmonyPatch(typeof(FistControl), nameof(FistControl.ArmChange))]
+        private static class ArmChangePatch
+        {
+            private static void Prefix(ref int orderNum)
+            {
+                // The custom variation is appended to the Standard/blue arm cycle.
+                if (orderNum == 1)
+                {
+                    if (variation < 0)
+                        return;
+                    variation = -1;
+                    slotSelected = false;
+                }
+                else if (orderNum == 0 && !slotSelected)
+                {
+                    variation++;
+                    if (variation == 0)
+                    {
+                        slotSelected = true;
+                        orderNum = 0;
+                    }
+                }
+                else if (orderNum == 0 && slotSelected)
+                {
+                    slotSelected = false;
+                    variation = -1;
+                }
+            }
+
+            private static void Postfix(FistControl __instance)
+            {
+                if (__instance == null)
+                    return;
+
+                if (slotSelected)
+                {
+                    if (__instance.fistIcon != null)
+                    {
+                        if (!savedIconColor)
+                        {
+                            originalIconColor = __instance.fistIcon.color;
+                            savedIconColor = true;
+                        }
+                        __instance.fistIcon.color = new Color32(225, 183, 62, 255);
+                    }
+
+                    // No custom mesh is required yet: keep the current stock arm as a placeholder.
+                    if (__instance.currentArmObject != null)
+                    {
+                        foreach (Renderer renderer in __instance.currentArmObject.GetComponentsInChildren<Renderer>(true))
+                        {
+                            if (renderer != null && renderer.material != null)
+                                renderer.material.color = new Color32(225, 183, 62, 255);
+                        }
+                    }
+                }
+                else if (__instance.fistIcon != null && savedIconColor)
+                {
+                    __instance.fistIcon.color = originalIconColor;
+                }
             }
         }
     }
