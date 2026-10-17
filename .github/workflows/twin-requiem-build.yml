@@ -61,7 +61,10 @@ jobs:
         run: dotnet build TwinRequiem/TwinRequiem.csproj --configuration Release
       - name: Run mechanics regression tests
         run: dotnet run --project TwinRequiem.Tests/TwinRequiem.Tests.csproj --configuration Release
-      - name: Confirm no public DLL release
-        shell: pwsh
-        run: |
-          Write-Host "Build validation only: no DLL artifact or release is published while TWIN REQUIEM is a visual/configuration prototype."
+      - name: Upload TWIN REQUIEM prototype DLL
+        uses: actions/upload-artifact@v4
+        with:
+          name: TWIN-REQUIEM-prototype-DLL
+          path: TwinRequiem/bin/Release/netstandard2.1/TwinRequiem.dll
+          if-no-files-found: error
+          retention-days: 14
