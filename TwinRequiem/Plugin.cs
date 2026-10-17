@@ -16,6 +16,11 @@ namespace TwinRequiem
         internal static ConfigEntry<bool> EnablePrototypeHook;
         private Harmony harmony;
 
+        internal static void LogCadence(string message)
+        {
+            if (Instance != null) Instance.Logger.LogInfo(message);
+        }
+
         private void Awake()
         {
             Instance = this;
@@ -57,8 +62,8 @@ namespace TwinRequiem
             if (lastShotTime > -999f && onBeat) streak++; else streak = 0;
             nextHand = 1 - nextHand;
             lastShotTime = now;
-            if (Plugin.Instance != null && streak > 0 && streak % 4 == 0)
-                Plugin.Instance.Logger.LogInfo("TWIN REQUIEM cadence: " + variant + " | alternating hand " + (nextHand == 0 ? "LEFT" : "RIGHT") + " | rhythm streak " + streak + ".");
+            if (streak > 0 && streak % 4 == 0)
+                Plugin.LogCadence("TWIN REQUIEM cadence: " + variant + " | alternating hand " + (nextHand == 0 ? "LEFT" : "RIGHT") + " | rhythm streak " + streak + ".");
         }
 
         internal static void Reset() { lastShotTime = -1000f; nextHand = 0; streak = 0; }
