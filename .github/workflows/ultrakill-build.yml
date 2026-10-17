@@ -1,5 +1,8 @@
 name: ULTRAKILL Reclaimer build
 
+permissions:
+  contents: write
+
 on:
   workflow_dispatch:
   push:
@@ -75,16 +78,30 @@ jobs:
       - name: Build plugin
         run: dotnet build ULTRAKILL-Arsenal-Expansion/Reclaimer.csproj --configuration Release
 
-      - name: Package plugin
+      - name: Prepare DLL download
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path out | Out-Null
           Copy-Item "ULTRAKILL-Arsenal-Expansion/bin/Release/netstandard2.1/Reclaimer.dll" "out/Reclaimer.dll"
-          Copy-Item "ULTRAKILL-Arsenal-Expansion/README.md" "out/README.md"
-          Compress-Archive -Path out/* -DestinationPath Reclaimer-build.zip -Force
 
       - name: Upload compiled plugin artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Reclaimer-build
-          path: ArsenalExpansion-v0.4.0-build.zip
+          name: RED-Reclaimer-DLL
+          path: out/Reclaimer.dll
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish direct DLL download
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "red-reclaimer-latest"
+          $asset = "out/Reclaimer.dll"
+          gh release view $tag --json tagName 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $tag $asset --clobber
+          } else {
+            gh release create $tag $asset --title "RED Reclaimer (latest build)" --notes "Latest compiled RED Reclaimer DLL. Prototype; in-game mechanics may still need testing."
+          }
