@@ -13,6 +13,7 @@ namespace TwinRequiem
         internal static Plugin Instance;
         internal static ConfigEntry<string> Variant;
         internal static ConfigEntry<bool> ApplyVisualTheme;
+        internal static RequiemRuntime Runtime;
         private Harmony harmony;
 
         private void Awake()
@@ -22,14 +23,16 @@ namespace TwinRequiem
                 "Visual palette prototype: Requiem, Dirge, Crescendo, or Encore.");
             ApplyVisualTheme = Config.Bind("Prototype", "Tint Stock Revolver",
                 false, "Experimental preview only: tints the stock Revolver model. Disabled by default.");
+            Runtime = new RequiemRuntime(RequiemRules.ParseVariant(Variant.Value));
             harmony = new Harmony("notelliotvr69.twinrequiem");
             try
             {
                 if (ApplyVisualTheme.Value)
                     harmony.PatchAll(typeof(Plugin).Assembly);
-                Logger.LogInfo("TWIN REQUIEM v0.2.0 loaded. Selected palette: " + Variant.Value +
-                    ". Experimental stock-Revolver tint: " + ApplyVisualTheme.Value +
-                    ". This is a visual/configuration prototype, not a separate weapon.");
+                Logger.LogInfo("TWIN REQUIEM v0.3.0 mechanics runtime initialized. Target slot: " +
+                    RequiemRules.TargetWeaponSlot + ", variant: " + Runtime.CurrentVariant +
+                    ", shot interval: " + Runtime.Tuning.ShotInterval + "s. Experimental stock-Revolver tint: " +
+                    ApplyVisualTheme.Value + ". Runtime is not yet connected to the game's firing/slot lifecycle.");
             }
             catch (Exception ex)
             {
