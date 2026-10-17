@@ -3,7 +3,7 @@
 A BepInEx 5 x64 plugin foundation for the planned dual-Slab-Revolver ULTRAKILL weapon.
 
 ## Planned weapon
-- Separate weapon slot (target slot 6).
+- Separate weapon slot (target slot 5).
 - Two existing Slab Revolver models, alternating left/right shots.
 - Dark crimson and dark purple finishes, with the red kept subdued.
 - Variants: Requiem (balanced), Dirge (slower/heavier), Crescendo (faster/tighter cadence), and Encore (secret challenge variant).
