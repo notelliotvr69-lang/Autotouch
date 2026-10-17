@@ -1,4 +1,4 @@
-name: ULTRAKILL Arsenal Expansion 0.4.0 build
+name: ULTRAKILL Reclaimer build
 
 on:
   workflow_dispatch:
@@ -73,18 +73,18 @@ jobs:
           }
 
       - name: Build plugin
-        run: dotnet build ULTRAKILL-Arsenal-Expansion/ArsenalExpansion.csproj --configuration Release
+        run: dotnet build ULTRAKILL-Arsenal-Expansion/Reclaimer.csproj --configuration Release
 
       - name: Package plugin
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path out | Out-Null
-          Copy-Item "ULTRAKILL-Arsenal-Expansion/bin/Release/netstandard2.1/ArsenalExpansion-v0.4.0.dll" "out/ArsenalExpansion.dll"
+          Copy-Item "ULTRAKILL-Arsenal-Expansion/bin/Release/netstandard2.1/Reclaimer.dll" "out/Reclaimer.dll"
           Copy-Item "ULTRAKILL-Arsenal-Expansion/README.md" "out/README.md"
-          Compress-Archive -Path out/* -DestinationPath ArsenalExpansion-v0.4.0-build.zip -Force
+          Compress-Archive -Path out/* -DestinationPath Reclaimer-build.zip -Force
 
       - name: Upload compiled plugin artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ArsenalExpansion-v0.4.0-build
+          name: Reclaimer-build
           path: ArsenalExpansion-v0.4.0-build.zip
