@@ -6,7 +6,7 @@ using UnityEngine;
 
 namespace ULTRAKILLModManager
 {
-    [BepInPlugin("notelliotvr69.modmanager", "ULTRAKILL Mod Manager", "0.1.0")]
+    [BepInPlugin("notelliotvr69.modmanager", "ULTRAKILL Mod Manager", "0.1.1")]
     public sealed class Plugin : BaseUnityPlugin
     {
         private bool visible;
@@ -50,7 +50,6 @@ namespace ULTRAKILLModManager
                 GUILayout.EndVertical();
             }
             GUILayout.EndScrollView();
-            if (GUILayout.Button("Refresh list")) Repaint();
             GUILayout.EndVertical();
             GUI.DragWindow(new Rect(0, 0, 10000, 26));
         }
