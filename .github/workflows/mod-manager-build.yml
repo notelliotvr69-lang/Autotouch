@@ -10,7 +10,7 @@ on:
     paths:
       - "ULTRAKILLModManager/**"
       - "UKReferenceZ.zip"
-      - "ULTRAKILL referenceZ 2.zip"
+      - "ULTRAKILL referenceZ 3.zip"
       - ".github/workflows/mod-manager-build.yml"
 jobs:
   build:
@@ -23,24 +23,39 @@ jobs:
       - name: Prepare reference DLLs
         shell: pwsh
         run: |
-          $required = @("Assembly-CSharp.dll","UnityEngine.dll","UnityEngine.CoreModule.dll","BepInEx.dll","0Harmony.dll")
-          $archives = @("UKReferenceZ.zip","ULTRAKILL referenceZ 2.zip") | Where-Object { Test-Path $_ }
-          if ($archives.Count -eq 0) { throw "No reference archives were found in the repository." }
+          $required = @(
+            @{ Name = "Assembly-CSharp.dll"; Destination = ".build/ULTRAKILL_Data/Managed/Assembly-CSharp.dll" },
+            @{ Name = "UnityEngine.dll"; Destination = ".build/ULTRAKILL_Data/Managed/UnityEngine.dll" },
+            @{ Name = "UnityEngine.CoreModule.dll"; Destination = ".build/ULTRAKILL_Data/Managed/UnityEngine.CoreModule.dll" },
+            @{ Name = "UnityEngine.IMGUIModule.dll"; Destination = ".build/ULTRAKILL_Data/Managed/UnityEngine.IMGUIModule.dll" },
+            @{ Name = "UnityEngine.InputLegacyModule.dll"; Destination = ".build/ULTRAKILL_Data/Managed/UnityEngine.InputLegacyModule.dll" },
+            @{ Name = "BepInEx.dll"; Destination = ".build/BepInEx/core/BepInEx.dll" },
+            @{ Name = "0Harmony.dll"; Destination = ".build/BepInEx/core/0Harmony.dll" }
+          )
+          $archives = @("ULTRAKILL referenceZ 3.zip", "UKReferenceZ.zip") | Where-Object { Test-Path $_ }
+          if ($archives.Count -eq 0) { throw "No reference archive found. Expected ULTRAKILL referenceZ 3.zip or UKReferenceZ.zip." }
+          $selected = $null
           $extractRoot = ".reference-extract"
           New-Item -ItemType Directory -Force -Path $extractRoot | Out-Null
           foreach ($archive in $archives) {
-            $dir = Join-Path $extractRoot ([IO.Path]::GetFileNameWithoutExtension($archive))
-            Expand-Archive -LiteralPath $archive -DestinationPath $dir -Force
+            $extractDir = Join-Path $extractRoot ([IO.Path]::GetFileNameWithoutExtension($archive))
+            Remove-Item -LiteralPath $extractDir -Recurse -Force -ErrorAction SilentlyContinue
+            New-Item -ItemType Directory -Force -Path $extractDir | Out-Null
+            Expand-Archive -LiteralPath $archive -DestinationPath $extractDir -Force
+            $allPresent = $true
+            foreach ($file in $required) {
+              if (@(Get-ChildItem $extractDir -Recurse -File -Filter $file.Name).Count -eq 0) { $allPresent = $false; break }
+            }
+            if ($allPresent) { $selected = $extractDir; Write-Host "Using reference archive: $archive"; break }
+            Write-Host "Archive missing one or more required DLLs: $archive"
           }
-          $missing = @()
-          foreach ($name in $required) {
-            $match = Get-ChildItem $extractRoot -Recurse -File -Filter $name | Select-Object -First 1
-            if (!$match) { $missing += $name; continue }
-            if ($name -in @("BepInEx.dll","0Harmony.dll")) { $dest = ".build/BepInEx/core" } else { $dest = ".build/ULTRAKILL_Data/Managed" }
-            New-Item -ItemType Directory -Force -Path $dest | Out-Null
-            Copy-Item $match.FullName (Join-Path $dest $name) -Force
+          if ($null -eq $selected) { throw "No reference archive contains all required assemblies, including UnityEngine.IMGUIModule.dll and UnityEngine.InputLegacyModule.dll." }
+          foreach ($file in $required) {
+            $match = Get-ChildItem $selected -Recurse -File -Filter $file.Name | Select-Object -First 1
+            $destinationDir = Split-Path $file.Destination -Parent
+            New-Item -ItemType Directory -Force -Path $destinationDir | Out-Null
+            Copy-Item -LiteralPath $match.FullName -Destination $file.Destination -Force
           }
-          if ($missing.Count -gt 0) { throw "Reference archives are missing required assemblies: $($missing -join ', ')" }
       - name: Build manager
         run: dotnet build ULTRAKILLModManager/ULTRAKILLModManager.csproj --configuration Release
       - uses: actions/upload-artifact@v4
