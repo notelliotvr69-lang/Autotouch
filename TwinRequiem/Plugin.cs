@@ -107,8 +107,7 @@ namespace TwinRequiem
                 }
                 catch (Exception ex)
                 {
-                    if (Plugin.Instance != null)
-                        Plugin.Instance.Logger.LogDebug("Skipped a Revolver material during palette preview: " + ex.Message);
+                    // Some game materials cannot be safely modified; skip them without interrupting gameplay.
                 }
             }
         }
