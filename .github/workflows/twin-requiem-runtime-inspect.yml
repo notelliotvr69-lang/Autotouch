@@ -32,7 +32,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path ".build/ULTRAKILL_Data/Managed" | Out-Null
           Copy-Item -LiteralPath $assembly.FullName -Destination ".build/ULTRAKILL_Data/Managed/Assembly-CSharp.dll" -Force
       - name: Inspect weapon and firing APIs
-        run: dotnet run --project TwinRequiem.Runtime.Inspector/TwinRequiem.Runtime.Inspector.csproj --configuration Release -- ".build/ULTRAKILL_Data/Managed/Assembly-CSharp.dll"
+        run: dotnet run --project TwinRequiem.Runtime.Inspector/Inspector.csproj --configuration Release -- ".build/ULTRAKILL_Data/Managed/Assembly-CSharp.dll"
       - name: Upload API inspection report
         uses: actions/upload-artifact@v4
         with:
