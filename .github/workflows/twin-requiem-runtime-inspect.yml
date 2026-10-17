@@ -1,0 +1,42 @@
+name: TWIN REQUIEM runtime API inspection
+
+permissions:
+  contents: read
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "TwinRequiem.Runtime.Inspector/**"
+      - "ULTRAKILL referenceZ 3.zip"
+      - ".github/workflows/twin-requiem-runtime-inspect.yml"
+
+jobs:
+  inspect:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "8.0.x"
+      - name: Extract Assembly-CSharp reference
+        shell: pwsh
+        run: |
+          $archive = "ULTRAKILL referenceZ 3.zip"
+          if (!(Test-Path $archive)) { throw "Missing $archive" }
+          New-Item -ItemType Directory -Force -Path ".reference-extract" | Out-Null
+          Expand-Archive -LiteralPath $archive -DestinationPath ".reference-extract" -Force
+          $assembly = Get-ChildItem ".reference-extract" -Recurse -File -Filter "Assembly-CSharp.dll" | Select-Object -First 1
+          if ($null -eq $assembly) { throw "Assembly-CSharp.dll was not found in referenceZ 3." }
+          New-Item -ItemType Directory -Force -Path ".build/ULTRAKILL_Data/Managed" | Out-Null
+          Copy-Item -LiteralPath $assembly.FullName -Destination ".build/ULTRAKILL_Data/Managed/Assembly-CSharp.dll" -Force
+      - name: Inspect weapon and firing APIs
+        run: dotnet run --project TwinRequiem.Runtime.Inspector/TwinRequiem.Runtime.Inspector.csproj --configuration Release -- ".build/ULTRAKILL_Data/Managed/Assembly-CSharp.dll"
+      - name: Upload API inspection report
+        uses: actions/upload-artifact@v4
+        with:
+          name: TWIN-REQUIEM-runtime-api-report
+          path: weapon-api-report.txt
+          if-no-files-found: error
+          retention-days: 14
