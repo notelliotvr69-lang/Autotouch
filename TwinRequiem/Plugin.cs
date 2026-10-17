@@ -16,6 +16,12 @@ namespace TwinRequiem
         internal static RequiemRuntime Runtime;
         private Harmony harmony;
 
+        internal static void LogDebug(string message)
+        {
+            if (Instance != null)
+                Instance.Logger.LogDebug(message);
+        }
+
         private void Awake()
         {
             Logger.LogInfo("TWIN REQUIEM v0.3.1 Awake entered.");
@@ -116,8 +122,7 @@ namespace TwinRequiem
                 }
                 catch (Exception ex)
                 {
-                    if (Plugin.Instance != null)
-                        Plugin.Instance.Logger.LogDebug("Skipping an unsupported Revolver material: " + ex.Message);
+                    Plugin.LogDebug("Skipping an unsupported Revolver material: " + ex.Message);
                 }
             }
         }
