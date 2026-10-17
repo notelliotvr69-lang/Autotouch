@@ -7,78 +7,126 @@ using UnityEngine;
 
 namespace TwinRequiem
 {
-    [BepInPlugin("notelliotvr69.twinrequiem", "TWIN REQUIEM", "0.1.0")]
+    [BepInPlugin("notelliotvr69.twinrequiem", "TWIN REQUIEM", "0.2.0")]
     public sealed class Plugin : BaseUnityPlugin
     {
         internal static Plugin Instance;
         internal static ConfigEntry<string> Variant;
-        internal static ConfigEntry<float> RhythmWindow;
-        internal static ConfigEntry<bool> EnablePrototypeHook;
+        internal static ConfigEntry<bool> ApplyVisualTheme;
         private Harmony harmony;
-
-        internal static void LogCadence(string message)
-        {
-            if (Instance != null) Instance.Logger.LogInfo(message);
-        }
 
         private void Awake()
         {
             Instance = this;
-            Variant = Config.Bind("Twin Requiem", "Variant", "Requiem", "Prototype variant: Requiem, Dirge, Crescendo, or Encore.");
-            RhythmWindow = Config.Bind("Twin Requiem", "Rhythm Window", 0.42f, "Seconds between alternating shots for a rhythm bonus.");
-            EnablePrototypeHook = Config.Bind("Prototype", "Hook Existing Revolver", true, "Temporarily test alternating-shot timing on the stock revolver while the custom weapon slot is developed.");
+            Variant = Config.Bind("Twin Requiem", "Variant", "Requiem",
+                "Visual palette prototype: Requiem, Dirge, Crescendo, or Encore.");
+            ApplyVisualTheme = Config.Bind("Prototype", "Tint Stock Revolver",
+                false, "Experimental preview only: tints the stock Revolver model. Disabled by default.");
             harmony = new Harmony("notelliotvr69.twinrequiem");
             try
             {
-                if (EnablePrototypeHook.Value)
+                if (ApplyVisualTheme.Value)
                     harmony.PatchAll(typeof(Plugin).Assembly);
-                Logger.LogInfo("TWIN REQUIEM v0.1.0 loaded. Variant: " + Variant.Value + ". Prototype hook: " + EnablePrototypeHook.Value + ". This build is a mechanics foundation; custom slot, dual Slab Revolver models, and projectile behavior are not implemented yet.");
+                Logger.LogInfo("TWIN REQUIEM v0.2.0 loaded. Selected palette: " + Variant.Value +
+                    ". Experimental stock-Revolver tint: " + ApplyVisualTheme.Value +
+                    ". This is a visual/configuration prototype, not a separate weapon.");
             }
-            catch (Exception ex) { Logger.LogError("TWIN REQUIEM failed to initialize: " + ex); }
+            catch (Exception ex)
+            {
+                Logger.LogError("TWIN REQUIEM failed to initialize: " + ex);
+            }
         }
 
         private void OnDestroy()
         {
-            if (harmony != null) { harmony.UnpatchSelf(); harmony = null; }
-            RequiemRhythm.Reset();
+            if (harmony != null)
+            {
+                harmony.UnpatchSelf();
+                harmony = null;
+            }
             Instance = null;
         }
     }
 
-    internal static class RequiemRhythm
+    internal static class RequiemPalette
     {
-        private static float lastShotTime = -1000f;
-        private static int nextHand;
-        private static int streak;
+        private static readonly Color RequiemCrimson = new Color32(104, 19, 34, 255);
+        private static readonly Color RequiemPurple = new Color32(48, 25, 76, 255);
+        private static readonly Color DirgeCrimson = new Color32(73, 13, 25, 255);
+        private static readonly Color DirgePurple = new Color32(35, 20, 53, 255);
+        private static readonly Color CrescendoCrimson = new Color32(125, 22, 42, 255);
+        private static readonly Color CrescendoPurple = new Color32(66, 31, 103, 255);
+        private static readonly Color EncoreCrimson = new Color32(49, 8, 20, 255);
+        private static readonly Color EncorePurple = new Color32(25, 12, 39, 255);
 
-        internal static void RegisterShot()
+        internal static void TintStockRevolver(object instance)
         {
-            float now = Time.time;
-            float window = Plugin.RhythmWindow != null ? Mathf.Max(0.08f, Plugin.RhythmWindow.Value) : 0.42f;
-            bool onBeat = now - lastShotTime <= window;
-            string variant = Plugin.Variant != null ? Plugin.Variant.Value.Trim() : "Requiem";
-            if (string.Equals(variant, "Dirge", StringComparison.OrdinalIgnoreCase)) onBeat = now - lastShotTime <= window * 1.6f;
-            else if (string.Equals(variant, "Crescendo", StringComparison.OrdinalIgnoreCase)) onBeat = now - lastShotTime <= window * 0.72f;
-            if (lastShotTime > -999f && onBeat) streak++; else streak = 0;
-            nextHand = 1 - nextHand;
-            lastShotTime = now;
-            if (streak > 0 && streak % 4 == 0)
-                Plugin.LogCadence("TWIN REQUIEM cadence: " + variant + " | alternating hand " + (nextHand == 0 ? "LEFT" : "RIGHT") + " | rhythm streak " + streak + ".");
-        }
+            if (instance == null || Plugin.Instance == null ||
+                Plugin.ApplyVisualTheme == null || !Plugin.ApplyVisualTheme.Value)
+                return;
 
-        internal static void Reset() { lastShotTime = -1000f; nextHand = 0; streak = 0; }
+            Component component = instance as Component;
+            if (component == null)
+                return;
+
+            Renderer[] renderers = component.GetComponentsInChildren<Renderer>(true);
+            if (renderers == null || renderers.Length == 0)
+                return;
+
+            string variant = Plugin.Variant != null ? Plugin.Variant.Value.Trim() : "Requiem";
+            Color crimson = RequiemCrimson;
+            Color purple = RequiemPurple;
+
+            if (string.Equals(variant, "Dirge", StringComparison.OrdinalIgnoreCase))
+            {
+                crimson = DirgeCrimson;
+                purple = DirgePurple;
+            }
+            else if (string.Equals(variant, "Crescendo", StringComparison.OrdinalIgnoreCase))
+            {
+                crimson = CrescendoCrimson;
+                purple = CrescendoPurple;
+            }
+            else if (string.Equals(variant, "Encore", StringComparison.OrdinalIgnoreCase))
+            {
+                crimson = EncoreCrimson;
+                purple = EncorePurple;
+            }
+
+            for (int i = 0; i < renderers.Length; i++)
+            {
+                Renderer renderer = renderers[i];
+                if (renderer == null)
+                    continue;
+
+                try
+                {
+                    Material material = renderer.material;
+                    if (material != null && material.HasProperty("_Color"))
+                        material.color = (i % 2 == 0) ? crimson : purple;
+                }
+                catch (Exception ex)
+                {
+                    if (Plugin.Instance != null)
+                        Plugin.Instance.Logger.LogDebug("Skipped a Revolver material during palette preview: " + ex.Message);
+                }
+            }
+        }
     }
 
-    // Reflection-based target lookup avoids binding to an uncertain overload at compile time.
-    // This prototype observes the stock Revolver Shoot entry point; it does not replace the gun.
+    // Optional visual preview only. This deliberately does not hook shooting or alter damage.
     [HarmonyPatch]
-    internal static class StockRevolverPrototypeHook
+    internal static class StockRevolverVisualPreview
     {
         private static MethodBase TargetMethod()
         {
             Type revolver = AccessTools.TypeByName("Revolver");
-            return revolver == null ? null : AccessTools.Method(revolver, "Shoot");
+            return revolver == null ? null : AccessTools.Method(revolver, "Start");
         }
-        private static void Prefix() { RequiemRhythm.RegisterShot(); }
+
+        private static void Postfix(object __instance)
+        {
+            RequiemPalette.TintStockRevolver(__instance);
+        }
     }
 }
