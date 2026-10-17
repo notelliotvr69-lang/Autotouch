@@ -53,6 +53,8 @@ jobs:
           }
       - name: Compile prototype (validation only)
         run: dotnet build TwinRequiem/TwinRequiem.csproj --configuration Release
+      - name: Run mechanics regression tests
+        run: dotnet run --project TwinRequiem.Tests/TwinRequiem.Tests.csproj --configuration Release
       - name: Confirm no public DLL release
         shell: pwsh
         run: |
