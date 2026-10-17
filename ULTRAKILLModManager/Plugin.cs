@@ -13,8 +13,6 @@ namespace ULTRAKILLModManager
         private Rect window = new Rect(30, 30, 540, 460);
         private Vector2 scroll;
         private string filter = "";
-        private GUIStyle titleStyle;
-        private GUIStyle rowStyle;
 
         private void Update()
         {
@@ -25,11 +23,6 @@ namespace ULTRAKILLModManager
         private void OnGUI()
         {
             if (!visible) return;
-            if (titleStyle == null)
-            {
-                titleStyle = new GUIStyle(GUI.skin.label) { fontSize = 22, fontStyle = FontStyle.Bold };
-                rowStyle = new GUIStyle(GUI.skin.label) { wordWrap = true };
-            }
             window = GUI.Window(194517, window, DrawWindow, "ULTRAKILL MOD MANAGER");
         }
 
@@ -50,10 +43,10 @@ namespace ULTRAKILLModManager
                     info.Metadata.GUID.IndexOf(filter, StringComparison.OrdinalIgnoreCase) < 0)
                     continue;
                 GUILayout.BeginVertical(GUI.skin.box);
-                GUILayout.Label(name, titleStyle);
-                GUILayout.Label("GUID: " + info.Metadata.GUID, rowStyle);
-                GUILayout.Label("Version: " + info.Metadata.Version, rowStyle);
-                GUILayout.Label("Assembly: " + info.Instance.GetType().Assembly.GetName().Name + ".dll", rowStyle);
+                GUILayout.Label(name);
+                GUILayout.Label("GUID: " + info.Metadata.GUID);
+                GUILayout.Label("Version: " + info.Metadata.Version);
+                GUILayout.Label("Assembly: " + info.Instance.GetType().Assembly.GetName().Name + ".dll");
                 GUILayout.EndVertical();
             }
             GUILayout.EndScrollView();
