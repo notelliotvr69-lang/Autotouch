@@ -2,8 +2,8 @@ using System;
 
 namespace TwinRequiem
 {
-    // Pure gameplay rules for the custom weapon. Kept independent of Unity so these
-    // mechanics can be tested before wiring them into ULTRAKILL's weapon lifecycle.
+    // Unified gameplay rules/runtime for TWIN REQUIEM. Kept independent of Unity so
+    // firing cadence, variants, and Encore qualification can be tested deterministically.
     internal enum RequiemVariant
     {
         Requiem,
@@ -130,4 +130,51 @@ namespace TwinRequiem
             usedTwinRequiemAttack = false;
         }
     }
+    
+    // One owner for the currently selected variant, dual-shot cadence, and Encore
+    // challenge state. Game hooks must call these methods when the weapon is wired in.
+    internal sealed class RequiemRuntime
+    {
+        private readonly DualShotSequencer sequencer = new DualShotSequencer();
+        private readonly EncoreChallengeTracker encore = new EncoreChallengeTracker();
+
+        internal RequiemVariant CurrentVariant { get; private set; }
+        internal VariantTuning Tuning { get { return RequiemRules.GetTuning(CurrentVariant); } }
+        internal bool EncoreAttemptInvalidated { get { return encore.IsInvalidated; } }
+
+        internal RequiemRuntime(RequiemVariant variant)
+        {
+            CurrentVariant = variant;
+            sequencer.Reset(0f);
+            encore.BeginLevel();
+        }
+
+        internal void SelectVariant(RequiemVariant variant)
+        {
+            CurrentVariant = variant;
+        }
+
+        // Returns true only when cadence allows a shot; the caller remains
+        // responsible for spawning the projectile before treating it as an attack.
+        internal bool TryBeginShot(float gameTime, out RequiemHand hand)
+        {
+            return sequencer.TryConsumeShot(gameTime, Tuning.ShotInterval, out hand);
+        }
+
+        internal void RecordAttack(AttackSource source)
+        {
+            encore.RecordAttack(source);
+        }
+
+        internal void BeginLevel()
+        {
+            encore.BeginLevel();
+        }
+
+        internal bool QualifiesForEncoreUnlock(bool levelCompleted)
+        {
+            return encore.QualifiesForUnlock(levelCompleted);
+        }
+    }
+
 }
