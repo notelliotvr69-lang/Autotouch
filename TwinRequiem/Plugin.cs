@@ -7,7 +7,7 @@ using UnityEngine;
 
 namespace TwinRequiem
 {
-    [BepInPlugin("notelliotvr69.twinrequiem", "TWIN REQUIEM", "0.3.0")]
+    [BepInPlugin("notelliotvr69.twinrequiem", "TWIN REQUIEM", "0.3.1")]
     public sealed class Plugin : BaseUnityPlugin
     {
         internal static Plugin Instance;
@@ -18,25 +18,32 @@ namespace TwinRequiem
 
         private void Awake()
         {
-            Instance = this;
-            Variant = Config.Bind("Twin Requiem", "Variant", "Requiem",
-                "Visual palette prototype: Requiem, Dirge, Crescendo, or Encore.");
-            ApplyVisualTheme = Config.Bind("Prototype", "Tint Stock Revolver",
-                false, "Experimental preview only: tints the stock Revolver model. Disabled by default.");
-            Runtime = new RequiemRuntime(RequiemRules.ParseVariant(Variant.Value));
-            harmony = new Harmony("notelliotvr69.twinrequiem");
+            Logger.LogInfo("TWIN REQUIEM v0.3.1 Awake entered.");
             try
             {
+                Instance = this;
+                Variant = Config.Bind("Twin Requiem", "Variant", "Requiem",
+                    "Visual palette prototype: Requiem, Dirge, Crescendo, or Encore.");
+                ApplyVisualTheme = Config.Bind("Prototype", "Tint Stock Revolver",
+                    false, "Experimental preview only: tints the stock Revolver model. Disabled by default.");
+                Runtime = new RequiemRuntime(RequiemRules.ParseVariant(Variant.Value));
+                harmony = new Harmony("notelliotvr69.twinrequiem");
                 if (ApplyVisualTheme.Value)
                     harmony.PatchAll(typeof(Plugin).Assembly);
-                Logger.LogInfo("TWIN REQUIEM v0.3.0 mechanics runtime initialized. Target slot: " +
+
+                Logger.LogInfo("TWIN REQUIEM v0.3.1 mechanics runtime initialized. Target slot: " +
                     RequiemRules.TargetWeaponSlot + ", variant: " + Runtime.CurrentVariant +
-                    ", shot interval: " + Runtime.Tuning.ShotInterval + "s. Experimental stock-Revolver tint: " +
-                    ApplyVisualTheme.Value + ". Runtime is not yet connected to the game's firing/slot lifecycle.");
+                    ", shot interval: " + Runtime.Tuning.ShotInterval +
+                    "s. This build is diagnostic/prototype only; it is not connected to the game's firing/slot lifecycle.");
             }
             catch (Exception ex)
             {
-                Logger.LogError("TWIN REQUIEM failed to initialize: " + ex);
+                Logger.LogError("TWIN REQUIEM startup failed: " + ex);
+                if (harmony != null)
+                {
+                    try { harmony.UnpatchSelf(); } catch (Exception cleanupEx) { Logger.LogWarning("Harmony cleanup failed: " + cleanupEx.Message); }
+                    harmony = null;
+                }
             }
         }
 
@@ -101,7 +108,6 @@ namespace TwinRequiem
                 Renderer renderer = renderers[i];
                 if (renderer == null)
                     continue;
-
                 try
                 {
                     Material material = renderer.material;
@@ -110,13 +116,13 @@ namespace TwinRequiem
                 }
                 catch (Exception ex)
                 {
-                    // Some game materials cannot be safely modified; skip them without interrupting gameplay.
+                    if (Plugin.Instance != null)
+                        Plugin.Instance.Logger.LogDebug("Skipping an unsupported Revolver material: " + ex.Message);
                 }
             }
         }
     }
 
-    // Optional visual preview only. This deliberately does not hook shooting or alter damage.
     [HarmonyPatch]
     internal static class StockRevolverVisualPreview
     {
