@@ -10,6 +10,7 @@ internal static class Program
         TestVariantParsingAndTuning();
         TestAlternatingHandsAndCadence();
         TestEncoreChallengeRules();
+        TestUnifiedRuntime();
 
         Console.WriteLine("TWIN REQUIEM mechanics tests passed (" + assertions + " assertions).");
     }
@@ -64,6 +65,27 @@ internal static class Program
         tracker.RecordAttack(AttackSource.TwinRequiem);
         tracker.RecordAttack(AttackSource.Punch);
         Check(!tracker.QualifiesForUnlock(true), "Punching invalidates challenge");
+    }
+
+    private static void TestUnifiedRuntime()
+    {
+        var runtime = new RequiemRuntime(RequiemVariant.Dirge);
+        Equal(RequiemVariant.Dirge, runtime.CurrentVariant, "Runtime keeps selected variant");
+        Check(runtime.Tuning.ShotInterval > 0.32f, "Runtime exposes selected variant tuning");
+
+        RequiemHand hand;
+        Check(runtime.TryBeginShot(1f, out hand), "Unified runtime accepts first shot");
+        Equal(RequiemHand.Left, hand, "Unified runtime starts on left hand");
+        Check(!runtime.TryBeginShot(1.1f, out hand), "Unified runtime enforces variant cadence");
+        Check(runtime.TryBeginShot(1.48f, out hand), "Unified runtime accepts shot after Dirge interval");
+        Equal(RequiemHand.Right, hand, "Unified runtime alternates to right hand");
+
+        runtime.BeginLevel();
+        runtime.RecordAttack(AttackSource.TwinRequiem);
+        Check(runtime.QualifiesForEncoreUnlock(true), "Unified runtime forwards Encore qualification");
+        runtime.RecordAttack(AttackSource.Punch);
+        Check(runtime.EncoreAttemptInvalidated, "Unified runtime exposes invalidated Encore attempt");
+        Check(!runtime.QualifiesForEncoreUnlock(true), "Unified runtime rejects invalidated Encore attempt");
     }
 
     private static void Check(bool condition, string message)
