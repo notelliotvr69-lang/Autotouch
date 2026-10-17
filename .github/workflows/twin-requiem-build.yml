@@ -1,7 +1,7 @@
-name: TWIN REQUIEM build
+name: TWIN REQUIEM build validation
 
 permissions:
-  contents: write
+  contents: read
 
 on:
   workflow_dispatch:
@@ -51,30 +51,9 @@ jobs:
             New-Item -ItemType Directory -Force -Path $destinationDir | Out-Null
             Copy-Item -LiteralPath $match.FullName -Destination $file.Destination -Force
           }
-      - name: Build plugin
+      - name: Compile prototype (validation only)
         run: dotnet build TwinRequiem/TwinRequiem.csproj --configuration Release
-      - name: Prepare direct DLL
+      - name: Confirm no public DLL release
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path out | Out-Null
-          Copy-Item "TwinRequiem/bin/Release/netstandard2.1/TwinRequiem.dll" "out/TwinRequiem.dll"
-      - name: Upload DLL artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: TWIN-REQUIEM-DLL
-          path: out/TwinRequiem.dll
-          if-no-files-found: error
-          retention-days: 30
-      - name: Publish direct DLL download
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          $tag = "twin-requiem-latest"
-          $asset = "out/TwinRequiem.dll"
-          gh release view $tag --json tagName 2>$null
-          if ($LASTEXITCODE -eq 0) {
-            gh release upload $tag $asset --clobber
-          } else {
-            gh release create $tag $asset --title "TWIN REQUIEM (latest build)" --notes "TWIN REQUIEM mechanics foundation prototype. Custom weapon slot and dual-model gameplay are not implemented yet."
-          }
+          Write-Host "Build validation only: no DLL artifact or release is published while TWIN REQUIEM is a visual/configuration prototype."
