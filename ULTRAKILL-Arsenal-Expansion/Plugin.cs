@@ -12,7 +12,7 @@ namespace ArsenalExpansion
 
         private void Awake()
         {
-            harmony = new Harmony("notelliotvr69.arsenalexpansion030");
+            harmony = new Harmony("notelliotvr69.reclaimer");
             try
             {
                 harmony.PatchAll(typeof(Plugin).Assembly);
@@ -78,10 +78,7 @@ namespace ArsenalExpansion
     {
         private static bool slotSelected;
         private static int variation = -1;
-        private static Color originalIconColor = Color.white;
-        private static bool savedIconColor;
-
-        internal static bool IsSelected => slotSelected;
+                internal static bool IsSelected => slotSelected;
 
         [HarmonyPatch(typeof(FistControl), nameof(FistControl.ArmChange))]
         private static class ArmChangePatch
@@ -119,29 +116,15 @@ namespace ArsenalExpansion
 
                 if (slotSelected)
                 {
-                    if (__instance.fistIcon != null)
-                    {
-                        if (!savedIconColor)
-                        {
-                            originalIconColor = __instance.fistIcon.color;
-                            savedIconColor = true;
-                        }
-                        __instance.fistIcon.color = new Color32(190, 35, 45, 255);
-                    }
-
                     // No custom mesh is required yet: keep the current stock arm as a placeholder.
                     if (__instance.currentArmObject != null)
                     {
                         foreach (Renderer renderer in __instance.currentArmObject.GetComponentsInChildren<Renderer>(true))
                         {
                             if (renderer != null && renderer.material != null)
-                                renderer.material.color = new Color32(225, 183, 62, 255);
+                                renderer.material.color = new Color32(190, 35, 45, 255);
                         }
                     }
-                }
-                else if (__instance.fistIcon != null && savedIconColor)
-                {
-                    __instance.fistIcon.color = originalIconColor;
                 }
             }
         }
