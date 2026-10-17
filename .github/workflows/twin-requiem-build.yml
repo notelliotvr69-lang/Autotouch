@@ -15,7 +15,7 @@ on:
     paths:
       - "TwinRequiem/**"
       - "UKReferenceZ.zip"
-      - "ULTRAKILL referenceZ 2.zip"
+      - "ULTRAKILL referenceZ 3.zip"
       - ".github/workflows/twin-requiem-build.yml"
 
 jobs:
@@ -37,8 +37,8 @@ jobs:
             @{ Name = "BepInEx.dll"; Destination = ".build/BepInEx/core/BepInEx.dll" },
             @{ Name = "0Harmony.dll"; Destination = ".build/BepInEx/core/0Harmony.dll" }
           )
-          $archives = @("UKReferenceZ.zip", "ULTRAKILL referenceZ 2.zip") | Where-Object { Test-Path $_ }
-          if ($archives.Count -eq 0) { throw "No reference archive found. Expected UKReferenceZ.zip or ULTRAKILL referenceZ 2.zip." }
+          $archives = @("ULTRAKILL referenceZ 3.zip", "UKReferenceZ.zip") | Where-Object { Test-Path $_ }
+          if ($archives.Count -eq 0) { throw "No reference archive found. Expected ULTRAKILL referenceZ 3.zip or UKReferenceZ.zip." }
           $selected = $null
           foreach ($archive in $archives) {
             $extractDir = Join-Path ".reference-extract" ([IO.Path]::GetFileNameWithoutExtension($archive))
