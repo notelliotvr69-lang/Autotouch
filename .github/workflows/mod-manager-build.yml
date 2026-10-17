@@ -1,0 +1,50 @@
+name: ULTRAKILL Mod Manager build
+permissions:
+  contents: read
+concurrency:
+  group: mod-manager-build-${{ github.ref }}
+  cancel-in-progress: true
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "ULTRAKILLModManager/**"
+      - "UKReferenceZ.zip"
+      - "ULTRAKILL referenceZ 2.zip"
+      - ".github/workflows/mod-manager-build.yml"
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "8.0.x"
+      - name: Prepare reference DLLs
+        shell: pwsh
+        run: |
+          $required = @("Assembly-CSharp.dll","UnityEngine.dll","UnityEngine.CoreModule.dll","UnityEngine.IMGUIModule.dll","BepInEx.dll","0Harmony.dll")
+          $archives = @("UKReferenceZ.zip","ULTRAKILL referenceZ 2.zip") | Where-Object { Test-Path $_ }
+          $selected = $null
+          foreach ($archive in $archives) {
+            $dir = Join-Path ".reference-extract" ([IO.Path]::GetFileNameWithoutExtension($archive))
+            Expand-Archive -LiteralPath $archive -DestinationPath $dir -Force
+            $ok = $true
+            foreach ($name in $required) { if (@(Get-ChildItem $dir -Recurse -File -Filter $name).Count -eq 0) { $ok = $false } }
+            if ($ok) { $selected = $dir; break }
+          }
+          if (!$selected) { throw "Reference archives lack one or more required assemblies." }
+          foreach ($name in $required) {
+            $match = Get-ChildItem $selected -Recurse -File -Filter $name | Select-Object -First 1
+            if ($name -in @("BepInEx.dll","0Harmony.dll")) { $dest = ".build/BepInEx/core" } else { $dest = ".build/ULTRAKILL_Data/Managed" }
+            New-Item -ItemType Directory -Force -Path $dest | Out-Null
+            Copy-Item $match.FullName (Join-Path $dest $name) -Force
+          }
+      - name: Build manager
+        run: dotnet build ULTRAKILLModManager/ULTRAKILLModManager.csproj --configuration Release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ULTRAKILL-Mod-Manager-DLL
+          path: ULTRAKILLModManager/bin/Release/netstandard2.1/ULTRAKILLModManager.dll
+          if-no-files-found: error
+          retention-days: 14
