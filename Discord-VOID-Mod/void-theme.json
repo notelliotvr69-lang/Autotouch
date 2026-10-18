@@ -1,0 +1,93 @@
+{
+  "spec": 2,
+  "name": "VOID — Purple Night",
+  "description": "A deep-purple Discord theme for VOID. Built for Revenge-compatible Discord Android mod loaders.",
+  "authors": [
+    {
+      "name": "VOID"
+    }
+  ],
+  "semanticColors": {
+    "BACKGROUND_PRIMARY": [
+      "#10091B",
+      "#F8F4FF"
+    ],
+    "BACKGROUND_SECONDARY": [
+      "#170D26",
+      "#EEE7F8"
+    ],
+    "BACKGROUND_SECONDARY_ALT": [
+      "#1D1030",
+      "#E7DDF4"
+    ],
+    "BACKGROUND_TERTIARY": [
+      "#0B0612",
+      "#FFFFFF"
+    ],
+    "BACKGROUND_ACCENT": [
+      "#7C3AED",
+      "#7C3AED"
+    ],
+    "BACKGROUND_FLOATING": [
+      "#160C24",
+      "#FFFFFF"
+    ],
+    "TEXT_NORMAL": [
+      "#F1E8FF",
+      "#24172F"
+    ],
+    "TEXT_MUTED": [
+      "#B5A4CC",
+      "#6E607D"
+    ],
+    "TEXT_LINK": [
+      "#C4A5FF",
+      "#6D35C8"
+    ],
+    "HEADER_PRIMARY": [
+      "#FFFFFF",
+      "#24172F"
+    ],
+    "HEADER_SECONDARY": [
+      "#D9C8F2",
+      "#6E607D"
+    ],
+    "INTERACTIVE_NORMAL": [
+      "#C7B6DF",
+      "#6E607D"
+    ],
+    "INTERACTIVE_HOVER": [
+      "#F2E8FF",
+      "#3E2856"
+    ],
+    "INTERACTIVE_ACTIVE": [
+      "#FFFFFF",
+      "#24172F"
+    ],
+    "INTERACTIVE_MUTED": [
+      "#6C587F",
+      "#B9A9C9"
+    ]
+  },
+  "rawColors": {
+    "BRAND_500": "#9B5CFF",
+    "BRAND_560": "#7C3AED",
+    "BRAND_600": "#6427C4",
+    "PRIMARY_100": "#F1E8FF",
+    "PRIMARY_200": "#D9C8F2",
+    "PRIMARY_300": "#B5A4CC",
+    "PRIMARY_360": "#8B76A8",
+    "PRIMARY_400": "#6C587F",
+    "PRIMARY_500": "#3B2852",
+    "PRIMARY_600": "#241633",
+    "PRIMARY_630": "#1D102B",
+    "PRIMARY_660": "#170D26",
+    "PRIMARY_700": "#10091B",
+    "PRIMARY_800": "#0B0612"
+  },
+  "background": {
+    "url": "https://raw.githubusercontent.com/notelliotvr69-lang/Autotouch/main/Discord-VOID-Mod/assets/void-background.gif",
+    "blur": 0,
+    "alpha": 0.22
+  }
+}
