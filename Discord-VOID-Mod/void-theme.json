@@ -84,10 +84,5 @@
     "PRIMARY_660": "#170D26",
     "PRIMARY_700": "#10091B",
     "PRIMARY_800": "#0B0612"
-  },
-  "background": {
-    "url": "https://raw.githubusercontent.com/notelliotvr69-lang/Autotouch/main/Discord-VOID-Mod/assets/void-background.gif",
-    "blur": 0,
-    "alpha": 0.22
   }
 }
