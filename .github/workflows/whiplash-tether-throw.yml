@@ -25,6 +25,7 @@ jobs:
             @{ Name = "UnityEngine.dll"; Destination = ".build/ULTRAKILL_Data/Managed/UnityEngine.dll" },
             @{ Name = "UnityEngine.CoreModule.dll"; Destination = ".build/ULTRAKILL_Data/Managed/UnityEngine.CoreModule.dll" },
             @{ Name = "UnityEngine.PhysicsModule.dll"; Destination = ".build/ULTRAKILL_Data/Managed/UnityEngine.PhysicsModule.dll" },
+            @{ Name = "UnityEngine.InputLegacyModule.dll"; Destination = ".build/ULTRAKILL_Data/Managed/UnityEngine.InputLegacyModule.dll" },
             @{ Name = "BepInEx.dll"; Destination = ".build/BepInEx/core/BepInEx.dll" },
             @{ Name = "0Harmony.dll"; Destination = ".build/BepInEx/core/0Harmony.dll" }
           )
