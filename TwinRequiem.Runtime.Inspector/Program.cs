@@ -7,9 +7,15 @@ internal static class Program
 {
     private static readonly string[] Keywords =
     {
-        "weapon", "revolver", "gun", "shoot", "fire", "projectile",
-        "bullet", "input", "slot", "equip", "switch", "attack",
-        "player", "weaponpick", "guncontrol", "newmovement"
+        "whiplash", "hookarm", "grapple", "hook", "enemyidentifier",
+        "enemy", "damage", "hurt", "collision", "rigidbody", "newmovement",
+        "playercamera", "camera", "input", "weapon", "attack", "fire"
+    };
+
+    private static readonly string[] DeepTypes =
+    {
+        "whiplash", "hookarm", "grapple", "enemyidentifier", "newmovement",
+        "playercamera", "hook"
     };
 
     private static int Main(string[] args)
@@ -21,10 +27,11 @@ internal static class Program
         }
 
         using (AssemblyDefinition assembly = AssemblyDefinition.ReadAssembly(args[0]))
-        using (var output = new StreamWriter("weapon-api-report.txt", false))
+        using (var output = new StreamWriter("whiplash-api-report.txt", false))
         {
-            output.WriteLine("TWIN REQUIEM game API inspection");
+            output.WriteLine("ULTRAKILL Whiplash / enemy / physics API inspection");
             output.WriteLine("Assembly: " + assembly.Name.FullName);
+            output.WriteLine("Source file: " + Path.GetFullPath(args[0]));
             output.WriteLine();
 
             foreach (TypeDefinition type in assembly.MainModule.Types
@@ -33,24 +40,32 @@ internal static class Program
                     || t.Methods.Any(m => Keywords.Any(k => m.Name.IndexOf(k, StringComparison.OrdinalIgnoreCase) >= 0)))
                 .OrderBy(t => t.FullName))
             {
+                bool deep = DeepTypes.Any(k => type.FullName.IndexOf(k, StringComparison.OrdinalIgnoreCase) >= 0);
                 output.WriteLine("TYPE " + type.FullName);
-                foreach (MethodDefinition method in type.Methods
-                    .Where(m => Keywords.Any(k => m.Name.IndexOf(k, StringComparison.OrdinalIgnoreCase) >= 0)
-                        || type.FullName.IndexOf("weapon", StringComparison.OrdinalIgnoreCase) >= 0
-                        || type.FullName.IndexOf("revolver", StringComparison.OrdinalIgnoreCase) >= 0
-                        || type.FullName.IndexOf("gun", StringComparison.OrdinalIgnoreCase) >= 0)
+                foreach (FieldDefinition field in type.Fields.Where(f => deep ||
+                    Keywords.Any(k => f.Name.IndexOf(k, StringComparison.OrdinalIgnoreCase) >= 0)).OrderBy(f => f.Name))
+                    output.WriteLine("  FIELD " + (field.IsPublic ? "public " : "nonpublic ") +
+                        (field.IsStatic ? "static " : "") + field.FieldType.FullName + " " + field.Name);
+
+                foreach (PropertyDefinition property in type.Properties.Where(p => deep ||
+                    Keywords.Any(k => p.Name.IndexOf(k, StringComparison.OrdinalIgnoreCase) >= 0)).OrderBy(p => p.Name))
+                    output.WriteLine("  PROPERTY " + property.PropertyType.FullName + " " + property.Name);
+
+                foreach (MethodDefinition method in type.Methods.Where(m => deep ||
+                    Keywords.Any(k => m.Name.IndexOf(k, StringComparison.OrdinalIgnoreCase) >= 0) ||
+                    type.FullName.IndexOf("weapon", StringComparison.OrdinalIgnoreCase) >= 0)
                     .OrderBy(m => m.Name))
                 {
                     string parameters = string.Join(", ", method.Parameters.Select(p => p.ParameterType.FullName + " " + p.Name));
                     output.WriteLine("  " + (method.IsPublic ? "public " : method.IsFamily ? "protected " : "nonpublic ")
-                        + (method.IsStatic ? "static " : "")
-                        + method.ReturnType.FullName + " " + method.Name + "(" + parameters + ")");
+                        + (method.IsStatic ? "static " : "") + method.ReturnType.FullName + " " +
+                        method.Name + "(" + parameters + ")");
                 }
                 output.WriteLine();
             }
         }
 
-        Console.WriteLine("Wrote weapon-api-report.txt");
+        Console.WriteLine("Wrote whiplash-api-report.txt");
         return 0;
     }
 
