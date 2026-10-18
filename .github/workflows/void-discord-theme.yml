@@ -1,0 +1,35 @@
+name: Build VOID Discord theme package
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "Discord-VOID-Mod/**"
+      - ".github/workflows/void-discord-theme.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  package-theme:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate VOID theme JSON
+        run: python -c "import json; p='Discord-VOID-Mod/void-theme.json'; d=json.load(open(p)); assert d.get('spec') == 2; assert d.get('name','').startswith('VOID'); print('Theme JSON valid:', d['name'])"
+
+      - name: Package VOID theme
+        run: |
+          mkdir -p dist/VOID-Discord-Theme
+          cp Discord-VOID-Mod/void-theme.json dist/VOID-Discord-Theme/
+          cp Discord-VOID-Mod/README.md dist/VOID-Discord-Theme/
+          cd dist
+          zip -r VOID-Discord-Theme.zip VOID-Discord-Theme
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VOID-Discord-Theme
+          path: dist/VOID-Discord-Theme.zip
+          if-no-files-found: error
+          retention-days: 14
