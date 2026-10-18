@@ -13,6 +13,7 @@ on:
     paths:
       - "TwinRequiem/**"
       - "TwinRequiem.Runtime/**"
+      - "TwinRequiem.Runtime.Inspector/**"
       - "ULTRAKILL referenceZ 3.zip"
       - "UKReferenceZ.zip"
       - ".github/workflows/twin-requiem-runtime-inspect.yml"
@@ -54,6 +55,15 @@ jobs:
             New-Item -ItemType Directory -Force -Path $destinationDir | Out-Null
             Copy-Item -LiteralPath $match.FullName -Destination $file.Destination -Force
           }
+      - name: Inspect Whiplash, enemy and physics APIs
+        run: dotnet run --project TwinRequiem.Runtime.Inspector/Inspector.csproj --configuration Release -- .build/ULTRAKILL_Data/Managed/Assembly-CSharp.dll
+      - name: Upload Whiplash API report
+        uses: actions/upload-artifact@v4
+        with:
+          name: ULTRAKILL-Whiplash-API-Report
+          path: whiplash-api-report.txt
+          if-no-files-found: error
+          retention-days: 14
       - name: Build actual runtime plugin DLL
         run: dotnet build TwinRequiem.Runtime/TwinRequiem.Runtime.csproj --configuration Release
       - name: Run mechanics regression tests
