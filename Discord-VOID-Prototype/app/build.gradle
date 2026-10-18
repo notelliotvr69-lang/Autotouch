@@ -1,12 +1,12 @@
 plugins { id 'com.android.application' }
 
 android {
-    namespace 'dev.void.discordprototype'
-    compileSdk 35
+    namespace 'dev.discordvoid.prototype'
+    compileSdkVersion 35
     defaultConfig {
-        applicationId 'dev.void.discordprototype'
-        minSdk 24
-        targetSdk 28
+        applicationId 'dev.discordvoid.prototype'
+        minSdkVersion 24
+        targetSdkVersion 28
         versionCode 1
         versionName '0.1.0'
     }
