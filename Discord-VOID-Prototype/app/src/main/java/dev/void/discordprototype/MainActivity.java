@@ -1,4 +1,4 @@
-package dev.void.discordprototype;
+package dev.discordvoid.prototype;
 
 import android.app.Activity;
 import android.content.Intent;
