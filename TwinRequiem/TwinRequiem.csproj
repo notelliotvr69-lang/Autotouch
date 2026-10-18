@@ -11,6 +11,7 @@
   <PropertyGroup>
     <GameManagedDir Condition="'$(GameManagedDir)' == ''">$(MSBuildThisFileDirectory)../.build/ULTRAKILL_Data/Managed</GameManagedDir>
     <BepInExDir Condition="'$(BepInExDir)' == ''">$(MSBuildThisFileDirectory)../.build/BepInEx/core</BepInExDir>
+    <AtlasDir Condition="'$(AtlasDir)' == ''">$(MSBuildThisFileDirectory)../.build/Atlas</AtlasDir>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="BepInEx"><HintPath>$(BepInExDir)/BepInEx.dll</HintPath><Private>false</Private></Reference>
@@ -18,5 +19,7 @@
     <Reference Include="UnityEngine"><HintPath>$(GameManagedDir)/UnityEngine.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="UnityEngine.CoreModule"><HintPath>$(GameManagedDir)/UnityEngine.CoreModule.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="Assembly-CSharp"><HintPath>$(GameManagedDir)/Assembly-CSharp.dll</HintPath><Private>false</Private></Reference>
+    <AtlasReferences Include="$(AtlasDir)/*.dll" />
+    <Reference Include="@(AtlasReferences)" Private="false" />
   </ItemGroup>
 </Project>
