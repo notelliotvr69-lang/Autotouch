@@ -1,0 +1,53 @@
+name: Whiplash Tether Throw DLL
+permissions:
+  contents: read
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "WhiplashTetherThrow/**"
+      - ".github/workflows/whiplash-tether-throw.yml"
+      - "ULTRAKILL referenceZ 3.zip"
+      - "UKReferenceZ.zip"
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "8.0.x"
+      - name: Prepare game references
+        shell: pwsh
+        run: |
+          $required = @(
+            @{ Name = "Assembly-CSharp.dll"; Destination = ".build/ULTRAKILL_Data/Managed/Assembly-CSharp.dll" },
+            @{ Name = "UnityEngine.dll"; Destination = ".build/ULTRAKILL_Data/Managed/UnityEngine.dll" },
+            @{ Name = "UnityEngine.CoreModule.dll"; Destination = ".build/ULTRAKILL_Data/Managed/UnityEngine.CoreModule.dll" },
+            @{ Name = "BepInEx.dll"; Destination = ".build/BepInEx/core/BepInEx.dll" },
+            @{ Name = "0Harmony.dll"; Destination = ".build/BepInEx/core/0Harmony.dll" }
+          )
+          $selected = $null
+          foreach ($archive in @("ULTRAKILL referenceZ 3.zip", "UKReferenceZ.zip")) {
+            if (!(Test-Path $archive)) { continue }
+            $dir = Join-Path ".reference-extract" ([IO.Path]::GetFileNameWithoutExtension($archive))
+            Expand-Archive -LiteralPath $archive -DestinationPath $dir -Force
+            $ok = $true
+            foreach ($f in $required) { if (@(Get-ChildItem $dir -Recurse -File -Filter $f.Name).Count -eq 0) { $ok = $false; break } }
+            if ($ok) { $selected = $dir; break }
+          }
+          if (!$selected) { throw "No reference archive contains all required DLLs." }
+          foreach ($f in $required) {
+            $found = Get-ChildItem $selected -Recurse -File -Filter $f.Name | Select-Object -First 1
+            New-Item -ItemType Directory -Force (Split-Path $f.Destination -Parent) | Out-Null
+            Copy-Item $found.FullName $f.Destination -Force
+          }
+      - name: Build WhiplashTetherThrow.dll
+        run: dotnet build WhiplashTetherThrow/WhiplashTetherThrow.csproj --configuration Release
+      - name: Upload plugin DLL
+        uses: actions/upload-artifact@v4
+        with:
+          name: WhiplashTetherThrow-DLL
+          path: WhiplashTetherThrow/bin/Release/netstandard2.1/WhiplashTetherThrow.dll
+          if-no-files-found: error
+          retention-days: 14
