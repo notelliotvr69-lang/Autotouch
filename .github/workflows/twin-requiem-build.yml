@@ -3,8 +3,6 @@ name: TWIN REQUIEM build validation
 permissions:
   contents: read
 
-# Push commits may arrive faster than Windows runners can build. Keep only the newest
-# validation run so intermediate commits do not leave misleading red builds behind.
 concurrency:
   group: twin-requiem-build-${{ github.ref }}
   cancel-in-progress: true
@@ -16,6 +14,7 @@ on:
       - "TwinRequiem/**"
       - "UKReferenceZ.zip"
       - "ULTRAKILL referenceZ 3.zip"
+      - "Waff1e-AtlasLib-3.0.7.zip"
       - ".github/workflows/twin-requiem-build.yml"
 
 jobs:
@@ -57,6 +56,26 @@ jobs:
             New-Item -ItemType Directory -Force -Path $destinationDir | Out-Null
             Copy-Item -LiteralPath $match.FullName -Destination $file.Destination -Force
           }
+      - name: Prepare Atlas reference DLLs
+        shell: pwsh
+        run: |
+          $archive = "Waff1e-AtlasLib-3.0.7.zip"
+          if (!(Test-Path $archive)) { throw "Atlas archive missing: $archive" }
+          $extractDir = ".reference-extract/Atlas"
+          $destination = ".build/Atlas"
+          Remove-Item -LiteralPath $extractDir -Recurse -Force -ErrorAction SilentlyContinue
+          Remove-Item -LiteralPath $destination -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path $extractDir, $destination | Out-Null
+          Expand-Archive -LiteralPath $archive -DestinationPath $extractDir -Force
+          $dlls = @(Get-ChildItem $extractDir -Recurse -File -Filter "*.dll")
+          Write-Host "Atlas archive contents:"
+          Get-ChildItem $extractDir -Recurse -File | ForEach-Object { Write-Host $_.FullName }
+          if ($dlls.Count -eq 0) { throw "Atlas ZIP contains no DLLs; inspect the archive format before building." }
+          foreach ($dll in $dlls) {
+            Copy-Item -LiteralPath $dll.FullName -Destination (Join-Path $destination $dll.Name) -Force
+          }
+          Write-Host "Atlas DLLs staged for compilation:"
+          Get-ChildItem $destination -File -Filter "*.dll" | ForEach-Object { Write-Host $_.Name }
       - name: Compile prototype (validation only)
         run: dotnet build TwinRequiem/TwinRequiem.csproj --configuration Release
       - name: Run mechanics regression tests
