@@ -16,20 +16,39 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Validate VOID theme JSON
-        run: python -c "import json; p='Discord-VOID-Mod/void-theme.json'; d=json.load(open(p)); assert d.get('spec') == 2; assert d.get('name','').startswith('VOID'); print('Theme JSON valid:', d['name'])"
-
-      - name: Package VOID theme
+      - name: Validate VOID theme manifests
         run: |
-          mkdir -p dist/VOID-Discord-Theme
-          cp Discord-VOID-Mod/void-theme.json dist/VOID-Discord-Theme/
-          cp Discord-VOID-Mod/README.md dist/VOID-Discord-Theme/
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          paths = [
+              Path("Discord-VOID-Mod/void-theme.json"),
+              Path("Discord-VOID-Mod/void-neon.json"),
+              Path("Discord-VOID-Mod/void-orchid.json"),
+          ]
+          for path in paths:
+              data = json.loads(path.read_text(encoding="utf-8"))
+              assert data.get("spec") == 2, f"{path}: expected Vendetta spec 2"
+              assert data.get("name", "").startswith("VOID — "), f"{path}: missing VOID theme name"
+              assert data.get("semanticColors"), f"{path}: semanticColors missing"
+              assert data.get("rawColors"), f"{path}: rawColors missing"
+              print(f"Validated: {data['name']} ({path})")
+          PY
+
+      - name: Package VOID themes
+        run: |
+          mkdir -p dist/VOID-Discord-Themes
+          cp Discord-VOID-Mod/void-theme.json dist/VOID-Discord-Themes/
+          cp Discord-VOID-Mod/void-neon.json dist/VOID-Discord-Themes/
+          cp Discord-VOID-Mod/void-orchid.json dist/VOID-Discord-Themes/
+          cp Discord-VOID-Mod/README.md dist/VOID-Discord-Themes/
           cd dist
-          zip -r VOID-Discord-Theme.zip VOID-Discord-Theme
+          zip -r VOID-Discord-Themes.zip VOID-Discord-Themes
 
       - uses: actions/upload-artifact@v4
         with:
-          name: VOID-Discord-Theme
-          path: dist/VOID-Discord-Theme.zip
+          name: VOID-Discord-Themes
+          path: dist/VOID-Discord-Themes.zip
           if-no-files-found: error
           retention-days: 14
