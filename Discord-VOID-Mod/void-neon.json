@@ -1,0 +1,88 @@
+{
+  "spec": 2,
+  "name": "VOID — Neon Violet",
+  "description": "A high-contrast neon violet palette for Discord Android. Requires a compatible theme loader.",
+  "authors": [
+    {
+      "name": "VOID"
+    }
+  ],
+  "semanticColors": {
+    "BACKGROUND_PRIMARY": [
+      "#0B0715",
+      "#FAF7FF"
+    ],
+    "BACKGROUND_SECONDARY": [
+      "#120A22",
+      "#F0E9FA"
+    ],
+    "BACKGROUND_SECONDARY_ALT": [
+      "#1A0D31",
+      "#E8DDF6"
+    ],
+    "BACKGROUND_TERTIARY": [
+      "#07040D",
+      "#FFFFFF"
+    ],
+    "BACKGROUND_ACCENT": [
+      "#A855F7",
+      "#7E22CE"
+    ],
+    "BACKGROUND_FLOATING": [
+      "#130A23",
+      "#FFFFFF"
+    ],
+    "TEXT_NORMAL": [
+      "#F7EEFF",
+      "#21132F"
+    ],
+    "TEXT_MUTED": [
+      "#C1A6D8",
+      "#756283"
+    ],
+    "TEXT_LINK": [
+      "#D8B4FE",
+      "#6D28D9"
+    ],
+    "HEADER_PRIMARY": [
+      "#FFFFFF",
+      "#21132F"
+    ],
+    "HEADER_SECONDARY": [
+      "#E9D5FF",
+      "#756283"
+    ],
+    "INTERACTIVE_NORMAL": [
+      "#D8B4FE",
+      "#756283"
+    ],
+    "INTERACTIVE_HOVER": [
+      "#FFFFFF",
+      "#3D2358"
+    ],
+    "INTERACTIVE_ACTIVE": [
+      "#FFFFFF",
+      "#21132F"
+    ],
+    "INTERACTIVE_MUTED": [
+      "#795B91",
+      "#B8A4C8"
+    ]
+  },
+  "rawColors": {
+    "BRAND_500": "#C084FC",
+    "BRAND_560": "#A855F7",
+    "BRAND_600": "#7E22CE",
+    "PRIMARY_100": "#F7EEFF",
+    "PRIMARY_200": "#E9D5FF",
+    "PRIMARY_300": "#C1A6D8",
+    "PRIMARY_360": "#9B7BB8",
+    "PRIMARY_400": "#795B91",
+    "PRIMARY_500": "#41265B",
+    "PRIMARY_600": "#28163B",
+    "PRIMARY_630": "#1A0D31",
+    "PRIMARY_660": "#120A22",
+    "PRIMARY_700": "#0B0715",
+    "PRIMARY_800": "#07040D"
+  }
+}
