@@ -1,0 +1,88 @@
+{
+  "spec": 2,
+  "name": "VOID — Orchid Glow",
+  "description": "A softer orchid-and-magenta palette for Discord Android. Requires a compatible theme loader.",
+  "authors": [
+    {
+      "name": "VOID"
+    }
+  ],
+  "semanticColors": {
+    "BACKGROUND_PRIMARY": [
+      "#160914",
+      "#FFF7FC"
+    ],
+    "BACKGROUND_SECONDARY": [
+      "#210D1E",
+      "#F7EAF4"
+    ],
+    "BACKGROUND_SECONDARY_ALT": [
+      "#2D1029",
+      "#F0DDED"
+    ],
+    "BACKGROUND_TERTIARY": [
+      "#0D050C",
+      "#FFFFFF"
+    ],
+    "BACKGROUND_ACCENT": [
+      "#C026D3",
+      "#A21CAF"
+    ],
+    "BACKGROUND_FLOATING": [
+      "#200C1D",
+      "#FFFFFF"
+    ],
+    "TEXT_NORMAL": [
+      "#FFEAFB",
+      "#32132E"
+    ],
+    "TEXT_MUTED": [
+      "#D0A9C9",
+      "#80637C"
+    ],
+    "TEXT_LINK": [
+      "#F0ABFC",
+      "#A21CAF"
+    ],
+    "HEADER_PRIMARY": [
+      "#FFFFFF",
+      "#32132E"
+    ],
+    "HEADER_SECONDARY": [
+      "#F5D0FE",
+      "#80637C"
+    ],
+    "INTERACTIVE_NORMAL": [
+      "#E9B5E2",
+      "#80637C"
+    ],
+    "INTERACTIVE_HOVER": [
+      "#FFF2FD",
+      "#512147"
+    ],
+    "INTERACTIVE_ACTIVE": [
+      "#FFFFFF",
+      "#32132E"
+    ],
+    "INTERACTIVE_MUTED": [
+      "#865B7E",
+      "#C5A7C0"
+    ]
+  },
+  "rawColors": {
+    "BRAND_500": "#E879F9",
+    "BRAND_560": "#C026D3",
+    "BRAND_600": "#A21CAF",
+    "PRIMARY_100": "#FFEAFB",
+    "PRIMARY_200": "#F5D0FE",
+    "PRIMARY_300": "#D0A9C9",
+    "PRIMARY_360": "#AE83A5",
+    "PRIMARY_400": "#865B7E",
+    "PRIMARY_500": "#512147",
+    "PRIMARY_600": "#3B1734",
+    "PRIMARY_630": "#2D1029",
+    "PRIMARY_660": "#210D1E",
+    "PRIMARY_700": "#160914",
+    "PRIMARY_800": "#0D050C"
+  }
+}
