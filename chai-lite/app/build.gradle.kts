@@ -29,3 +29,4 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
+    implementation("com.google.ai.edge.litertlm:litertlm-android:0.18.0")
