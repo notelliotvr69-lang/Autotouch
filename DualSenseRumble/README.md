@@ -1,6 +1,6 @@
 # DualSense Rumble
 
-A small Android app that asks Android's input-device framework to vibrate a connected DualSense controller.
+A small Android app that asks Android's input-device framework to run a brief vibration test on a connected DualSense controller.
 
 ## Build
 
@@ -10,10 +10,10 @@ Open the GitHub Actions workflow named **Build DualSense Rumble APK** and run it
 
 1. Pair the DualSense in Android Bluetooth settings.
 2. Open the app and tap **Scan for Controller**.
-3. If Android exposes the controller's vibrator, choose an intensity and tap **Start Rumble**.
-4. Tap **Stop** to end it immediately.
+3. If Android exposes the controller's vibrator, choose an intensity and tap **Start Short Test**.
+4. Each test is a 1.5-second burst. Tap **Stop** to cancel it immediately.
 
-The test automatically stops after 60 seconds and whenever the app goes into the background.
+The app also stops vibration whenever it goes into the background.
 
 ## Compatibility note
 

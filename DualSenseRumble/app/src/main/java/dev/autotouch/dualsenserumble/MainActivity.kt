@@ -25,11 +25,16 @@ class MainActivity : Activity(), InputManager.InputDeviceListener {
     private lateinit var startButton: Button
     private var selectedDeviceId = -1
     private var controllerVibrator: Vibrator? = null
-    private var rumbling = false
 
     private val handler = Handler(Looper.getMainLooper())
-    private val safetyStop = Runnable {
-        stopRumble("Safety stop: the 60-second test ended.")
+    private val finishTest = Runnable {
+        if (::startButton.isInitialized) {
+            startButton.isEnabled = controllerVibrator?.hasVibrator() == true
+        }
+        if (::statusText.isInitialized) {
+            statusText.text = "Test finished. Tap Start to run another short test."
+            statusText.setTextColor(Color.LTGRAY)
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -93,9 +98,7 @@ class MainActivity : Activity(), InputManager.InputDeviceListener {
             progress = 100
             setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
                 override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-                    val value = progress.coerceAtLeast(1)
-                    intensityText.text = "Intensity: $value%"
-                    if (rumbling) applyRumble()
+                    intensityText.text = "Intensity: ${progress.coerceAtLeast(1)}%"
                 }
                 override fun onStartTrackingTouch(seekBar: SeekBar?) = Unit
                 override fun onStopTrackingTouch(seekBar: SeekBar?) = Unit
@@ -104,21 +107,21 @@ class MainActivity : Activity(), InputManager.InputDeviceListener {
         root.addView(intensitySlider, matchWrap())
 
         startButton = Button(this).apply {
-            text = "START RUMBLE"
+            text = "START SHORT TEST"
             isEnabled = false
-            setOnClickListener { startRumble() }
+            setOnClickListener { startRumbleTest() }
         }
         val startParams = matchWrap().apply { topMargin = dp(24) }
         root.addView(startButton, startParams)
 
         val stopButton = Button(this).apply {
             text = "STOP"
-            setOnClickListener { stopRumble("Rumble stopped.") }
+            setOnClickListener { stopTest("Test stopped.") }
         }
         root.addView(stopButton, matchWrap())
 
         val note = TextView(this).apply {
-            text = "The app stops automatically after 60 seconds and whenever you leave it. Keep the controller in your hands only while testing."
+            text = "Each test is a brief 1.5-second burst. STOP cancels it immediately, and leaving the app also stops vibration."
             textSize = 13f
             setTextColor(Color.LTGRAY)
             gravity = Gravity.CENTER
@@ -130,7 +133,7 @@ class MainActivity : Activity(), InputManager.InputDeviceListener {
     }
 
     private fun refreshController() {
-        stopRumble()
+        stopTest()
         selectedDeviceId = -1
         controllerVibrator = null
 
@@ -178,23 +181,13 @@ class MainActivity : Activity(), InputManager.InputDeviceListener {
         startButton.isEnabled = true
     }
 
-    private fun startRumble() {
+    private fun startRumbleTest() {
         val vibrator = controllerVibrator
         if (vibrator == null || !vibrator.hasVibrator()) {
             refreshController()
             return
         }
-        rumbling = true
-        applyRumble()
-        handler.removeCallbacks(safetyStop)
-        handler.postDelayed(safetyStop, 60_000L)
-        startButton.isEnabled = false
-        statusText.text = "Rumble running. It will stop automatically after 60 seconds."
-        statusText.setTextColor(Color.rgb(130, 230, 160))
-    }
 
-    private fun applyRumble() {
-        val vibrator = controllerVibrator ?: return
         val percent = intensitySlider.progress.coerceAtLeast(1)
         val amplitude = if (vibrator.hasAmplitudeControl()) {
             (percent * 255 / 100).coerceIn(1, 255)
@@ -203,28 +196,24 @@ class MainActivity : Activity(), InputManager.InputDeviceListener {
         }
 
         try {
-            val effect = VibrationEffect.createWaveform(
-                longArrayOf(0L, 5_000L),
-                intArrayOf(amplitude, amplitude),
-                0
-            )
-            vibrator.vibrate(effect)
+            vibrator.vibrate(VibrationEffect.createOneShot(1_500L, amplitude))
+            startButton.isEnabled = false
+            statusText.text = "Short rumble test running…"
+            statusText.setTextColor(Color.rgb(130, 230, 160))
+            handler.removeCallbacks(finishTest)
+            handler.postDelayed(finishTest, 1_600L)
         } catch (error: Exception) {
-            rumbling = false
-            handler.removeCallbacks(safetyStop)
-            startButton.isEnabled = controllerVibrator?.hasVibrator() == true
             statusText.text = "Could not start controller rumble: ${error.message ?: "unsupported vibration request"}"
             statusText.setTextColor(Color.rgb(255, 150, 130))
         }
     }
 
-    private fun stopRumble(message: String? = null) {
-        handler.removeCallbacks(safetyStop)
+    private fun stopTest(message: String? = null) {
+        handler.removeCallbacks(finishTest)
         try {
             controllerVibrator?.cancel()
         } catch (_: Exception) {
         }
-        rumbling = false
         if (::startButton.isInitialized) {
             startButton.isEnabled = controllerVibrator?.hasVibrator() == true
         }
@@ -241,12 +230,12 @@ class MainActivity : Activity(), InputManager.InputDeviceListener {
     override fun onInputDeviceChanged(deviceId: Int) = refreshController()
 
     override fun onPause() {
-        stopRumble("Rumble stopped because the app went into the background.")
+        stopTest("Test stopped because the app went into the background.")
         super.onPause()
     }
 
     override fun onDestroy() {
-        stopRumble()
+        stopTest()
         inputManager.unregisterInputDeviceListener(this)
         super.onDestroy()
     }
