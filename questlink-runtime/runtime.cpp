@@ -490,7 +490,7 @@ void bridgeServerLoop() {
 
             if (!encoderReady) continue;
             std::vector<uint8_t> h264AccessUnit;
-            const int64_t timestamp100ns = static_cast<int64_t>(frame.id) * 10000000LL / 45;
+            const int64_t timestamp100ns = static_cast<int64_t>(frame.id) * 10000000LL / 90;
             if (!h264.encode(frame.bgra.data(), frame.width, frame.height,
                              timestamp100ns, h264AccessUnit)) continue;
 
