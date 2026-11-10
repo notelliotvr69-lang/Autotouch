@@ -17,4 +17,6 @@ private:
     IMFTransform* transform_ = nullptr;
     uint32_t width_ = 0, height_ = 0;
     uint64_t frameIndex_ = 0;
+    bool mfStarted_ = false;
+    bool comInitialized_ = false;
 };
