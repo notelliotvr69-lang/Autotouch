@@ -815,7 +815,7 @@ public class MainActivity extends Activity implements SensorEventListener {
                 }
                 input.clear();
                 input.put(accessUnit);
-                long ptsUs = Math.max(0L, frameId) * 1000000L / 45L;
+                long ptsUs = Math.max(0L, frameId) * 1000000L / 90L;
                 codec.queueInputBuffer(inputIndex, 0, accessUnit.length, ptsUs, 0);
             }
 
