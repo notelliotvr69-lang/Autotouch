@@ -4,7 +4,7 @@
 #include <unknwn.h>
 #include <d3d11.h>
 #include <dxgi1_2.h>
-#include <wincodec.h>
+#include "h264_encoder.h"
 
 #include <openxr/openxr.h>
 #include <openxr/openxr_platform.h>
@@ -242,92 +242,6 @@ void setHeadPose(const XrPosef& pose) {
     g_headPoseValid = true;
 }
 
-bool encodeJpeg(const StreamFrame& frame, std::vector<uint8_t>& jpeg) {
-    if (frame.bgra.empty() || frame.width == 0 || frame.height == 0) return false;
-
-    HRESULT initHr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
-    const bool shouldUninit = SUCCEEDED(initHr);
-
-    IWICImagingFactory* factory = nullptr;
-    IStream* stream = nullptr;
-    IWICBitmapEncoder* encoder = nullptr;
-    IWICBitmapFrameEncode* frameEncode = nullptr;
-    IWICBitmap* bitmap = nullptr;
-
-    bool ok = false;
-
-    do {
-        HRESULT hr = CoCreateInstance(
-            CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER,
-            IID_PPV_ARGS(&factory));
-        if (FAILED(hr) || !factory) break;
-
-        hr = CreateStreamOnHGlobal(nullptr, TRUE, &stream);
-        if (FAILED(hr) || !stream) break;
-
-        hr = factory->CreateEncoder(GUID_ContainerFormatJpeg, nullptr, &encoder);
-        if (FAILED(hr) || !encoder) break;
-
-        hr = encoder->Initialize(stream, WICBitmapEncoderNoCache);
-        if (FAILED(hr)) break;
-
-        hr = encoder->CreateNewFrame(&frameEncode, nullptr);
-        if (FAILED(hr) || !frameEncode) break;
-
-        hr = frameEncode->Initialize(nullptr);
-        if (FAILED(hr)) break;
-
-        hr = frameEncode->SetSize(frame.width, frame.height);
-        if (FAILED(hr)) break;
-
-        WICPixelFormatGUID pixelFormat = GUID_WICPixelFormat24bppBGR;
-        hr = frameEncode->SetPixelFormat(&pixelFormat);
-        if (FAILED(hr)) break;
-
-        hr = factory->CreateBitmapFromMemory(
-            frame.width,
-            frame.height,
-            GUID_WICPixelFormat32bppBGRA,
-            frame.width * 4,
-            static_cast<UINT>(frame.bgra.size()),
-            const_cast<BYTE*>(frame.bgra.data()),
-            &bitmap);
-        if (FAILED(hr) || !bitmap) break;
-
-        hr = frameEncode->WriteSource(bitmap, nullptr);
-        if (FAILED(hr)) break;
-
-        hr = frameEncode->Commit();
-        if (FAILED(hr)) break;
-
-        hr = encoder->Commit();
-        if (FAILED(hr)) break;
-
-        STATSTG stat{};
-        hr = stream->Stat(&stat, STATFLAG_NONAME);
-        if (FAILED(hr) || stat.cbSize.QuadPart == 0 || stat.cbSize.QuadPart > 16 * 1024 * 1024) break;
-
-        LARGE_INTEGER zero{};
-        hr = stream->Seek(zero, STREAM_SEEK_SET, nullptr);
-        if (FAILED(hr)) break;
-
-        jpeg.resize(static_cast<size_t>(stat.cbSize.QuadPart));
-        ULONG readBytes = 0;
-        hr = stream->Read(jpeg.data(), static_cast<ULONG>(jpeg.size()), &readBytes);
-        if (FAILED(hr) || readBytes != jpeg.size()) break;
-
-        ok = true;
-    } while (false);
-
-    if (bitmap) bitmap->Release();
-    if (frameEncode) frameEncode->Release();
-    if (encoder) encoder->Release();
-    if (stream) stream->Release();
-    if (factory) factory->Release();
-    if (shouldUninit) CoUninitialize();
-
-    return ok;
-}
 
 bool copyProjectionEye(
     SessionState* session,
@@ -500,6 +414,10 @@ void receiveHeadPoseLoop(SOCKET client, std::atomic<bool>& alive) {
 }
 
 void bridgeServerLoop() {
+    QuestLinkH264Encoder h264;
+    const bool encoderReady = h264.initialize(kEyeStreamWidth * 2, kEyeStreamHeight, 45, 8000000);
+    logLine(encoderReady ? "QuestLink bridge: hardware H.264 encoder ready" :
+                           "QuestLink bridge: no compatible hardware H.264 encoder found");
     WSADATA wsa{};
     if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) {
         logLine("QuestLink bridge: WSAStartup failed");
@@ -569,21 +487,24 @@ void bridgeServerLoop() {
                 lastVersion = g_latestFrameVersion;
             }
 
-            std::vector<uint8_t> jpeg;
-            if (!encodeJpeg(frame, jpeg)) continue;
+            if (!encoderReady) continue;
+            std::vector<uint8_t> h264AccessUnit;
+            const int64_t timestamp100ns = static_cast<int64_t>(frame.id) * 10000000LL / 45;
+            if (!h264.encode(frame.bgra.data(), frame.width, frame.height,
+                             timestamp100ns, h264AccessUnit)) continue;
 
-            const char magic[4] = {'Q', 'L', 'F', '1'};
+            const char magic[4] = {'Q', 'L', 'V', '2'};
             uint32_t nw = htonl(frame.width);
             uint32_t nh = htonl(frame.height);
             uint64_t nid = hostToNetwork64(frame.id);
-            uint32_t ns = htonl(static_cast<uint32_t>(jpeg.size()));
+            uint32_t ns = htonl(static_cast<uint32_t>(h264AccessUnit.size()));
 
             if (!sendAll(client, magic, sizeof(magic)) ||
                 !sendAll(client, &nw, sizeof(nw)) ||
                 !sendAll(client, &nh, sizeof(nh)) ||
                 !sendAll(client, &nid, sizeof(nid)) ||
                 !sendAll(client, &ns, sizeof(ns)) ||
-                !sendAll(client, jpeg.data(), jpeg.size())) {
+                !sendAll(client, h264AccessUnit.data(), h264AccessUnit.size())) {
                 alive.store(false);
                 break;
             }
