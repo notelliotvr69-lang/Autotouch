@@ -3,8 +3,10 @@ package com.questtools.questlink;
 import android.app.Activity;
 import android.content.SharedPreferences;
 import android.content.res.ColorStateList;
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
+import android.media.MediaCodec;
+import android.media.MediaFormat;
+import android.view.Surface;
+import android.view.SurfaceView;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
@@ -62,7 +64,10 @@ public class MainActivity extends Activity implements SensorEventListener {
 
     private FrameLayout appShell;
     private FrameLayout streamOverlay;
-    private ImageView streamView;
+    private SurfaceView streamSurface;
+    private MediaCodec streamDecoder;
+    private int decoderWidth = 0;
+    private int decoderHeight = 0;
     private TextView streamStatus;
 
     private volatile boolean streamRunning = false;
@@ -425,10 +430,9 @@ public class MainActivity extends Activity implements SensorEventListener {
         streamOverlay.setBackgroundColor(Color.BLACK);
         streamOverlay.setVisibility(View.GONE);
 
-        streamView = new ImageView(this);
-        streamView.setBackgroundColor(Color.BLACK);
-        streamView.setScaleType(ImageView.ScaleType.FIT_CENTER);
-        streamOverlay.addView(streamView, new FrameLayout.LayoutParams(
+        streamSurface = new SurfaceView(this);
+        streamSurface.setBackgroundColor(Color.BLACK);
+        streamOverlay.addView(streamSurface, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT));
 
@@ -700,7 +704,7 @@ public class MainActivity extends Activity implements SensorEventListener {
         streamRunning = true;
         streamOverlay.setVisibility(View.VISIBLE);
         streamStatus.setText("Waiting for Gorilla Tag / runtime stream on port " + STREAM_PORT + "...");
-        streamView.setImageDrawable(null);
+        stopVideoDecoder();
 
         streamThread = new Thread(() -> {
             Exception lastError = null;
@@ -753,8 +757,8 @@ public class MainActivity extends Activity implements SensorEventListener {
 
         while (streamRunning && !socket.isClosed()) {
             in.readFully(magic);
-            if (magic[0] != 'Q' || magic[1] != 'L' || magic[2] != 'F' || magic[3] != '1') {
-                throw new IOException("Bad QuestLink stream packet");
+            if (magic[0] != 'Q' || magic[1] != 'L' || magic[2] != 'V' || magic[3] != '2') {
+                throw new IOException("Bad QuestLink H.264 packet");
             }
 
             int width = in.readInt();
@@ -763,28 +767,87 @@ public class MainActivity extends Activity implements SensorEventListener {
             int payloadSize = in.readInt();
 
             if (width <= 0 || height <= 0 || width > 4096 || height > 4096 ||
-                    payloadSize <= 0 || payloadSize > 16 * 1024 * 1024) {
-                throw new IOException("Invalid QuestLink frame");
+                    (width & 1) != 0 || (height & 1) != 0 ||
+                    payloadSize <= 0 || payloadSize > 8 * 1024 * 1024) {
+                throw new IOException("Invalid QuestLink H.264 frame");
             }
 
-            byte[] jpeg = new byte[payloadSize];
-            in.readFully(jpeg);
+            byte[] accessUnit = new byte[payloadSize];
+            in.readFully(accessUnit);
+            decodeH264Frame(width, height, frameId, accessUnit);
+        }
+    }
 
-            Bitmap bitmap = BitmapFactory.decodeByteArray(jpeg, 0, jpeg.length);
-            if (bitmap == null) continue;
+    private void decodeH264Frame(int width, int height, long frameId, byte[] accessUnit)
+            throws IOException {
+        try {
+            if (streamDecoder == null || decoderWidth != width || decoderHeight != height) {
+                stopVideoDecoder();
+                long deadline = System.currentTimeMillis() + 5000;
+                while (streamRunning && !streamSurface.getHolder().getSurface().isValid() &&
+                        System.currentTimeMillis() < deadline) {
+                    try { Thread.sleep(20); } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        throw new IOException("Interrupted waiting for video surface", e);
+                    }
+                }
+                Surface surface = streamSurface.getHolder().getSurface();
+                if (!surface.isValid()) throw new IOException("Quest video surface is unavailable");
+
+                MediaFormat format = MediaFormat.createVideoFormat(
+                        MediaFormat.MIMETYPE_VIDEO_AVC, width, height);
+                format.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, Math.max(payloadSizeHint(width, height), 1024 * 1024));
+                MediaCodec codec = MediaCodec.createDecoderByType(MediaFormat.MIMETYPE_VIDEO_AVC);
+                codec.configure(format, surface, null, 0);
+                codec.start();
+                streamDecoder = codec;
+                decoderWidth = width;
+                decoderHeight = height;
+            }
+
+            MediaCodec codec = streamDecoder;
+            int inputIndex = codec.dequeueInputBuffer(10000);
+            if (inputIndex >= 0) {
+                java.nio.ByteBuffer input = codec.getInputBuffer(inputIndex);
+                if (input == null || accessUnit.length > input.capacity()) {
+                    codec.queueInputBuffer(inputIndex, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM);
+                    throw new IOException("H.264 access unit exceeds decoder input buffer");
+                }
+                input.clear();
+                input.put(accessUnit);
+                long ptsUs = Math.max(0L, frameId) * 1000000L / 45L;
+                codec.queueInputBuffer(inputIndex, 0, accessUnit.length, ptsUs, 0);
+            }
+
+            MediaCodec.BufferInfo info = new MediaCodec.BufferInfo();
+            int outputIndex;
+            while ((outputIndex = codec.dequeueOutputBuffer(info, 0)) >= 0) {
+                codec.releaseOutputBuffer(outputIndex, true);
+            }
 
             ui.post(() -> {
-                if (!streamRunning) {
-                    bitmap.recycle();
-                    return;
-                }
-
-                streamView.setImageBitmap(bitmap);
-                streamStatus.setText(
-                        "LIVE • " + width + "×" + height +
-                        " • frame " + frameId +
-                        " • Quest pose → PC");
+                if (streamRunning) streamStatus.setText(
+                        "LIVE • H.264 hardware decode • " + width + "×" + height +
+                        " • frame " + frameId + " • Quest pose → PC");
             });
+        } catch (IOException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IOException("H.264 decoder error: " + e.getMessage(), e);
+        }
+    }
+
+    private int payloadSizeHint(int width, int height) {
+        return Math.min(8 * 1024 * 1024, width * height);
+    }
+
+    private void stopVideoDecoder() {
+        MediaCodec codec = streamDecoder;
+        streamDecoder = null;
+        decoderWidth = decoderHeight = 0;
+        if (codec != null) {
+            try { codec.stop(); } catch (Exception ignored) {}
+            try { codec.release(); } catch (Exception ignored) {}
         }
     }
 
@@ -870,6 +933,7 @@ public class MainActivity extends Activity implements SensorEventListener {
     private void stopStreamPreview() {
         streamRunning = false;
         stopPoseTracking();
+        stopVideoDecoder();
         closeStreamSocketOnly();
 
         if (streamOverlay != null) streamOverlay.setVisibility(View.GONE);
