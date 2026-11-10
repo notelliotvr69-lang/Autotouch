@@ -796,7 +796,7 @@ public class MainActivity extends Activity implements SensorEventListener {
 
                 MediaFormat format = MediaFormat.createVideoFormat(
                         MediaFormat.MIMETYPE_VIDEO_AVC, width, height);
-                format.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, Math.max(payloadSizeHint(width, height), 1024 * 1024));
+                format.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 8 * 1024 * 1024);
                 MediaCodec codec = MediaCodec.createDecoderByType(MediaFormat.MIMETYPE_VIDEO_AVC);
                 codec.configure(format, surface, null, 0);
                 codec.start();
@@ -835,10 +835,6 @@ public class MainActivity extends Activity implements SensorEventListener {
         } catch (Exception e) {
             throw new IOException("H.264 decoder error: " + e.getMessage(), e);
         }
-    }
-
-    private int payloadSizeHint(int width, int height) {
-        return Math.min(8 * 1024 * 1024, width * height);
     }
 
     private void stopVideoDecoder() {
