@@ -345,8 +345,8 @@ bool copyProjectionEye(
 void captureProjectionFrame(SessionState* session, const XrFrameEndInfo* frameEndInfo) {
     if (!session || !frameEndInfo) return;
 
-    // Keep the proof-of-life bridge light enough to test over normal Wi-Fi.
-    if ((session->frameIndex % 6) != 0) return;
+    // At the runtime's 90 Hz frame cadence, capture every other frame for a
+    // 45 FPS stream target. The latest-frame mailbox drops stale work.
 
     const XrCompositionLayerProjection* projection = nullptr;
     for (uint32_t i = 0; i < frameEndInfo->layerCount; ++i) {
