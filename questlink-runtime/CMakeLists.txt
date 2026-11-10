@@ -6,6 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 add_library(QuestLinkOpenXRRuntime SHARED
     runtime.cpp
+    h264_encoder.cpp
 )
 
 target_compile_definitions(QuestLinkOpenXRRuntime PRIVATE
@@ -25,7 +26,9 @@ target_link_libraries(QuestLinkOpenXRRuntime PRIVATE
     dxgi
     dxguid
     ws2_32
-    windowscodecs
+    mfplat
+    mf
+    mfuuid
     ole32
 )
 
