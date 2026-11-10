@@ -38,6 +38,7 @@ struct SessionState {
     bool frameBegun = false;
     XrSessionState state = XR_SESSION_STATE_IDLE;
     uint64_t frameIndex = 0;
+    std::chrono::steady_clock::time_point nextFrameDeadline{};
 };
 
 struct SpaceState {
@@ -870,6 +871,7 @@ static XrResult XRAPI_CALL ql_xrBeginSession(
     if (s->running) return XR_ERROR_SESSION_RUNNING;
 
     s->running = true;
+    s->nextFrameDeadline = std::chrono::steady_clock::now();
     pushSessionState(session, XR_SESSION_STATE_SYNCHRONIZED);
     pushSessionState(session, XR_SESSION_STATE_VISIBLE);
     pushSessionState(session, XR_SESSION_STATE_FOCUSED);
@@ -1176,7 +1178,19 @@ static XrResult XRAPI_CALL ql_xrWaitFrame(
     if (!s->running) return XR_ERROR_SESSION_NOT_RUNNING;
     if (!frameState) return XR_ERROR_VALIDATION_FAILURE;
 
+    // Pace the application at the runtime's current 90 Hz target instead of
+    // returning immediately and allowing an uncapped xrWaitFrame loop.
     constexpr XrDuration period = 11111111;
+    const auto interval = std::chrono::nanoseconds(period);
+    const auto now = std::chrono::steady_clock::now();
+
+    if (s->nextFrameDeadline.time_since_epoch().count() == 0 ||
+        s->nextFrameDeadline < now - interval) {
+        s->nextFrameDeadline = now;
+    }
+    s->nextFrameDeadline += interval;
+    std::this_thread::sleep_until(s->nextFrameDeadline);
+
     frameState->predictedDisplayPeriod = period;
     frameState->predictedDisplayTime = nowNs() + period;
     frameState->shouldRender = XR_TRUE;
