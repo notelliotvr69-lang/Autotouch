@@ -347,6 +347,7 @@ void captureProjectionFrame(SessionState* session, const XrFrameEndInfo* frameEn
 
     // At the runtime's 90 Hz frame cadence, capture every other frame for a
     // 45 FPS stream target. The latest-frame mailbox drops stale work.
+    if ((session->frameIndex & 1ULL) != 0) return;
 
     const XrCompositionLayerProjection* projection = nullptr;
     for (uint32_t i = 0; i < frameEndInfo->layerCount; ++i) {
