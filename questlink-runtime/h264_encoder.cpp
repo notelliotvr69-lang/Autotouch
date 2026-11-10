@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cstring>
 #include <new>
+#include <objbase.h>
 
 namespace {
 void releaseCom(IUnknown*& p) { if (p) { p->Release(); p = nullptr; } }
@@ -46,13 +47,18 @@ QuestLinkH264Encoder::~QuestLinkH264Encoder() { shutdown(); }
 void QuestLinkH264Encoder::shutdown() {
     if (transform_) { transform_->ProcessMessage(MFT_MESSAGE_NOTIFY_END_STREAMING, 0); transform_->Release(); transform_=nullptr; }
     width_=height_=0; frameIndex_=0;
-    MFShutdown();
+    if (mfStarted_) { MFShutdown(); mfStarted_=false; }
+    if (comInitialized_) { CoUninitialize(); comInitialized_=false; }
 }
 
 bool QuestLinkH264Encoder::initialize(uint32_t width, uint32_t height, uint32_t fps, uint32_t bitrate) {
     shutdown();
     if (!width || !height || (width&1) || (height&1)) return false;
-    if (FAILED(MFStartup(MF_VERSION, MFSTARTUP_FULL))) return false;
+    HRESULT comHr=CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+    if (SUCCEEDED(comHr)) comInitialized_=true;
+    else if (comHr!=RPC_E_CHANGED_MODE) return false;
+    if (FAILED(MFStartup(MF_VERSION, MFSTARTUP_FULL))) { shutdown(); return false; }
+    mfStarted_=true;
 
     MFT_REGISTER_TYPE_INFO inputInfo{MFMediaType_Video, MFVideoFormat_NV12};
     MFT_REGISTER_TYPE_INFO outputInfo{MFMediaType_Video, MFVideoFormat_H264};
@@ -61,7 +67,7 @@ bool QuestLinkH264Encoder::initialize(uint32_t width, uint32_t height, uint32_t 
     HRESULT hr=MFTEnumEx(MFT_CATEGORY_VIDEO_ENCODER,
         MFT_ENUM_FLAG_HARDWARE | MFT_ENUM_FLAG_SORTANDFILTER,
         &inputInfo, &outputInfo, &activates, &count);
-    if (FAILED(hr) || !count || !activates) { MFShutdown(); return false; }
+    if (FAILED(hr) || !count || !activates) { shutdown(); return false; }
 
     for (UINT32 i=0; i<count && !transform_; ++i) {
         IMFTransform* candidate=nullptr;
@@ -91,7 +97,7 @@ bool QuestLinkH264Encoder::initialize(uint32_t width, uint32_t height, uint32_t 
     }
     for (UINT32 i=0;i<count;++i) activates[i]->Release();
     CoTaskMemFree(activates);
-    if (!transform_) { MFShutdown(); return false; }
+    if (!transform_) { shutdown(); return false; }
     transform_->ProcessMessage(MFT_MESSAGE_NOTIFY_BEGIN_STREAMING,0);
     transform_->ProcessMessage(MFT_MESSAGE_NOTIFY_START_OF_STREAM,0);
     width_=width; height_=height; frameIndex_=0;
