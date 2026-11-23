@@ -35,9 +35,10 @@ public class MainActivity extends Activity {
     private String selectedGameName = "Gorilla Tag";
     private ServerSocket companionServer;
     private static final int COMPANION_PORT=47821;
-    private final int bg = Color.rgb(10,12,20), panel = Color.rgb(24,27,40),
-        accent = Color.rgb(125,92,255), text = Color.rgb(245,246,255),
-        muted = Color.rgb(164,171,194);
+    // VRFlex theme: light surfaces, black framing/text, orange controls.
+    private final int bg = Color.rgb(242,239,232), panel = Color.rgb(255,255,255),
+        accent = Color.rgb(255,140,0), text = Color.rgb(12,12,12),
+        muted = Color.rgb(70,70,70);
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
@@ -48,21 +49,23 @@ public class MainActivity extends Activity {
         buildShell(); startCompanionServer(); showTab(0);
     }
     private GradientDrawable shape(int c,int r) {
-        GradientDrawable d=new GradientDrawable(); d.setColor(c); d.setCornerRadius(r); return d;
+        GradientDrawable d=new GradientDrawable(); d.setColor(c); d.setCornerRadius(r);
+        d.setStroke(3, Color.BLACK); return d;
     }
     private TextView label(String s,int z,boolean bold) {
         TextView t=new TextView(this); t.setText(s); t.setTextColor(text); t.setTextSize(z);
         if(bold)t.setTypeface(Typeface.DEFAULT,Typeface.BOLD); return t;
     }
     private void buildShell() {
-        LinearLayout root=new LinearLayout(this); root.setOrientation(1); root.setPadding(20,18,20,18); root.setBackgroundColor(bg);
+        LinearLayout root=new LinearLayout(this); root.setOrientation(1); root.setPadding(20,18,20,18);
+        GradientDrawable frame=shape(bg,10); frame.setStroke(5,Color.BLACK); root.setBackground(frame);
         LinearLayout header=new LinearLayout(this); header.setGravity(Gravity.CENTER_VERTICAL);
         header.addView(label("VRFLEX",25,true),new LinearLayout.LayoutParams(0,-2,1));
         TextView ver=label("QUEST 3 • v0.2",12,true); ver.setTextColor(muted); header.addView(ver); root.addView(header);
         TextView sub=label("Game profiles • comfort controls",14,false); sub.setTextColor(muted); root.addView(sub);
         LinearLayout tabs=new LinearLayout(this); tabs.setPadding(0,16,0,12);
         String[] names={"Library","Movement","Arms","General"};
-        for(int i=0;i<names.length;i++){final int n=i; Button b=new Button(this); b.setText(names[i]); b.setTextSize(11); b.setAllCaps(false); b.setTextColor(text); b.setBackground(shape(panel,14));
+        for(int i=0;i<names.length;i++){final int n=i; Button b=new Button(this); b.setText(names[i]); b.setTextSize(11); b.setAllCaps(false); b.setTextColor(Color.BLACK); b.setBackground(shape(accent,14));
             LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,50,1); p.setMargins(0,0,5,0); tabs.addView(b,p);
             b.setOnClickListener(v->{activeTab=n;showTab(n);});}
         root.addView(tabs);
@@ -100,7 +103,7 @@ public class MainActivity extends Activity {
     private void gameCard(String id,String name,String detail) {
         LinearLayout box=new LinearLayout(this); box.setOrientation(1); box.setPadding(18,16,18,16); box.setBackground(shape(panel,20));
         box.addView(label(name,19,true)); TextView d=label(detail,12,false);d.setTextColor(muted);box.addView(d);
-        Button b=new Button(this);b.setText("Open "+name+" profile");b.setAllCaps(false);b.setTextColor(text);b.setBackground(shape(accent,14));box.addView(b);
+        Button b=new Button(this);b.setText("Open "+name+" profile");b.setAllCaps(false);b.setTextColor(Color.BLACK);b.setBackground(shape(accent,14));box.addView(b);
         b.setOnClickListener(v->chooseGame(id));
         LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);p.setMargins(0,0,0,14);content.addView(box,p);
     }
@@ -126,8 +129,18 @@ public class MainActivity extends Activity {
                 LinearLayout item=new LinearLayout(this); item.setOrientation(1); item.setPadding(14,12,14,12); item.setBackground(shape(panel,16));
                 item.addView(label(name,15,true));
                 TextView detail=label(pkg+" • Profile only; no live integration",10,false); detail.setTextColor(muted); item.addView(detail);
-                Button add=new Button(this); add.setAllCaps(false); add.setText(profiles.contains(pkg)?"Open profile":"Add profile"); add.setOnClickListener(v->{profiles.add(pkg);prefs.edit().putStringSet("game_profiles",new HashSet<>(profiles)).putString("selected_game",pkg).putString("selected_game_name",name).apply();selectedGame=pkg;selectedGameName=name;activeTab=1;showTab(1);});
+                Button add=new Button(this); add.setAllCaps(false); add.setText(profiles.contains(pkg)?"Open VRFlex profile":"Add VRFlex profile");
+                add.setTextColor(Color.BLACK); add.setBackground(shape(accent,12));
+                add.setOnClickListener(v->{profiles.add(pkg);prefs.edit().putStringSet("game_profiles",new HashSet<>(profiles)).putString("selected_game",pkg).putString("selected_game_name",name).apply();selectedGame=pkg;selectedGameName=name;activeTab=1;showTab(1);});
                 item.addView(add);
+                Button launch=new Button(this); launch.setAllCaps(false); launch.setText("Launch "+name);
+                launch.setTextColor(Color.BLACK); launch.setBackground(shape(accent,12));
+                launch.setOnClickListener(v->{
+                    Intent game=getPackageManager().getLaunchIntentForPackage(pkg);
+                    if(game!=null) { try { startActivity(game); } catch(Exception e) { Toast.makeText(this,"Could not launch "+name,Toast.LENGTH_SHORT).show(); } }
+                    else Toast.makeText(this,"No launch activity found for "+name,Toast.LENGTH_SHORT).show();
+                });
+                item.addView(launch);
                 LinearLayout.LayoutParams ip=new LinearLayout.LayoutParams(-1,-2);ip.setMargins(0,0,0,8);content.addView(item,ip);
             }
             card("Integration status","The library and profile storage are implemented. Game hooks, the in-game Y-button overlay, and live movement are not installed yet; each game needs a compatible integration.");
