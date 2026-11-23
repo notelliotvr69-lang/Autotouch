@@ -93,7 +93,9 @@ public class MainActivity extends Activity {
     private void space(){View v=new View(this);content.addView(v,new LinearLayout.LayoutParams(1,8));}
     private String gameName(){return selectedGame.equals("gorilla")?"Gorilla Tag":selectedGame.equals("gilla")?"GILLA":selectedGameName;}
     private void chooseGame(String id) {
-        selectedGame=id; selectedGameName=id.equals("gorilla")?"Gorilla Tag":id.equals("gilla")?"GILLA":selectedGameName;\n        prefs.edit().putString("selected_game",selectedGame).putString("selected_game_name",selectedGameName).apply();\n        activeTab=1; showTab(1);
+        selectedGame=id; selectedGameName=id.equals("gorilla")?"Gorilla Tag":id.equals("gilla")?"GILLA":selectedGameName;
+        prefs.edit().putString("selected_game",selectedGame).putString("selected_game_name",selectedGameName).apply();
+        activeTab=1; showTab(1);
     }
     private void gameCard(String id,String name,String detail) {
         LinearLayout box=new LinearLayout(this); box.setOrientation(1); box.setPadding(18,16,18,16); box.setBackground(shape(panel,20));
