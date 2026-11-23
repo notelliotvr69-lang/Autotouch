@@ -54,20 +54,14 @@ replace_once(
 ''',
 "left Y action")
 
-replace_once(
-'''            {actionSelect_,             "/user/hand/left/input/trigger/value"},
-            {actionSpawnCube_,          "/user/hand/left/input/trigger/value"},''',
-'''            {actionSelect_,             "/user/hand/left/input/trigger/value"},
+binding_before = '''            {actionSelect_,             "/user/hand/left/input/trigger/value"},
+            {actionSpawnCube_,          "/user/hand/left/input/trigger/value"},'''
+binding_after = '''            {actionSelect_,             "/user/hand/left/input/trigger/value"},
             {actionMenuToggle_,         "/user/hand/left/input/y/click"},
-            {actionSpawnCube_,          "/user/hand/left/input/trigger/value"},''',
-"Touch Y binding")
-replace_once(
-'''            {actionSelect_,             "/user/hand/left/input/trigger/value"},
-            {actionSpawnCube_,          "/user/hand/left/input/trigger/value"},''',
-'''            {actionSelect_,             "/user/hand/left/input/trigger/value"},
-            {actionMenuToggle_,         "/user/hand/left/input/y/click"},
-            {actionSpawnCube_,          "/user/hand/left/input/trigger/value"},''',
-"Touch Pro Y binding")
+            {actionSpawnCube_,          "/user/hand/left/input/trigger/value"},'''
+if s.count(binding_before) != 2:
+    raise SystemExit(f"Expected two left-trigger binding blocks, found {s.count(binding_before)}")
+s = s.replace(binding_before, binding_after, 2)
 
 replace_once(
 '''        OXR(xrLocateSpace(spaceGripRight_, mainReferenceSpace_, time, &locationGripRight_));
