@@ -42,6 +42,8 @@ public class MainActivity extends Activity {
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
         prefs = getSharedPreferences("vrflex", MODE_PRIVATE);
+        selectedGame=prefs.getString("selected_game","gorilla");
+        selectedGameName=prefs.getString("selected_game_name","Gorilla Tag");
         getWindow().setStatusBarColor(bg); getWindow().setNavigationBarColor(bg);
         buildShell(); startCompanionServer(); showTab(0);
     }
@@ -91,7 +93,7 @@ public class MainActivity extends Activity {
     private void space(){View v=new View(this);content.addView(v,new LinearLayout.LayoutParams(1,8));}
     private String gameName(){return selectedGame.equals("gorilla")?"Gorilla Tag":selectedGame.equals("gilla")?"GILLA":selectedGameName;}
     private void chooseGame(String id) {
-        selectedGame=id; selectedGameName=id.equals("gorilla")?"Gorilla Tag":id.equals("gilla")?"GILLA":selectedGameName; activeTab=1; showTab(1);
+        selectedGame=id; selectedGameName=id.equals("gorilla")?"Gorilla Tag":id.equals("gilla")?"GILLA":selectedGameName;\n        prefs.edit().putString("selected_game",selectedGame).putString("selected_game_name",selectedGameName).apply();\n        activeTab=1; showTab(1);
     }
     private void gameCard(String id,String name,String detail) {
         LinearLayout box=new LinearLayout(this); box.setOrientation(1); box.setPadding(18,16,18,16); box.setBackground(shape(panel,20));
@@ -114,7 +116,7 @@ public class MainActivity extends Activity {
                     return a.loadLabel(getPackageManager()).toString().compareToIgnoreCase(b.loadLabel(getPackageManager()).toString());
                 }
             });
-            Set<String> profiles=prefs.getStringSet("game_profiles",new HashSet<>());
+            Set<String> profiles=new HashSet<>(prefs.getStringSet("game_profiles",new HashSet<>()));
             for(ResolveInfo app:installed) {
                 if(app.activityInfo==null || app.activityInfo.packageName.equals(getPackageName())) continue;
                 final String pkg=app.activityInfo.packageName;
@@ -122,7 +124,7 @@ public class MainActivity extends Activity {
                 LinearLayout item=new LinearLayout(this); item.setOrientation(1); item.setPadding(14,12,14,12); item.setBackground(shape(panel,16));
                 item.addView(label(name,15,true));
                 TextView detail=label(pkg+" • Profile only; no live integration",10,false); detail.setTextColor(muted); item.addView(detail);
-                Button add=new Button(this); add.setAllCaps(false); add.setText(profiles.contains(pkg)?"Open profile":"Add profile"); add.setOnClickListener(v->{selectedGame=pkg;selectedGameName=name;activeTab=1;showTab(1);});
+                Button add=new Button(this); add.setAllCaps(false); add.setText(profiles.contains(pkg)?"Open profile":"Add profile"); add.setOnClickListener(v->{profiles.add(pkg);prefs.edit().putStringSet("game_profiles",new HashSet<>(profiles)).putString("selected_game",pkg).putString("selected_game_name",name).apply();selectedGame=pkg;selectedGameName=name;activeTab=1;showTab(1);});
                 item.addView(add);
                 LinearLayout.LayoutParams ip=new LinearLayout.LayoutParams(-1,-2);ip.setMargins(0,0,0,8);content.addView(item,ip);
             }
