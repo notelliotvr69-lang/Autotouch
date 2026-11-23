@@ -1,0 +1,55 @@
+name: Build VRFlex OpenXR prototype
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'VRFlex/OpenXR/**'
+      - '.github/workflows/vrflex-openxr-apk.yml'
+  pull_request:
+    paths:
+      - 'VRFlex/OpenXR/**'
+      - '.github/workflows/vrflex-openxr-apk.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: vrflex-openxr-build
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.4'
+      - name: Install Android SDK and NDK
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+            "platforms;android-32" "build-tools;32.0.0" "ndk;27.0.12077973" "cmake;3.22.1"
+      - name: Fetch official Meta OpenXR sample framework
+        run: git clone --depth 1 https://github.com/meta-quest/Meta-OpenXR-SDK.git "$RUNNER_TEMP/Meta-OpenXR-SDK"
+      - name: Apply VRFlex controller-menu prototype
+        run: |
+          python3 VRFlex/OpenXR/patch_sample.py "$RUNNER_TEMP/Meta-OpenXR-SDK"
+          sed -i 's/com.oculus.xrsamples.xrinput/com.vrflex.questxr/g' "$RUNNER_TEMP/Meta-OpenXR-SDK/Samples/XrSamples/XrInput/Projects/Android/build.gradle"
+          sed -i 's/com.oculus.xrsamples.xrinput/com.vrflex.questxr/g' "$RUNNER_TEMP/Meta-OpenXR-SDK/Samples/XrSamples/XrInput/Projects/Android/AndroidManifest.xml"
+          sed -i 's/@string\/app_name/VRFlex/g' "$RUNNER_TEMP/Meta-OpenXR-SDK/Samples/XrSamples/XrInput/Projects/Android/AndroidManifest.xml"
+      - name: Build immersive Quest APK
+        working-directory: ${{ runner.temp }}/Meta-OpenXR-SDK/Samples/XrSamples/XrInput/Projects/Android
+        run: gradle --no-daemon --stacktrace assembleDebug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VRFlex-OpenXR-debug
+          path: ${{ runner.temp }}/Meta-OpenXR-SDK/Samples/XrSamples/XrInput/Projects/Android/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 30
