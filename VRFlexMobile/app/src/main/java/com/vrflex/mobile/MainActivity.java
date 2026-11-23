@@ -29,8 +29,10 @@ public class MainActivity extends Activity {
    String result;
    try(Socket s=new Socket(host,47821)) {
     s.setSoTimeout(4000); PrintWriter out=new PrintWriter(s.getOutputStream(),true);
-    BufferedReader in=new BufferedReader(new InputStreamReader(s.getInputStream())); out.println("PING");
-    result="VRFLEX_READY".equals(in.readLine())?"Connected to VRFlex on Quest ✓":"Unexpected response from Quest.";
+    BufferedReader in=new BufferedReader(new InputStreamReader(s.getInputStream())); out.println("STATUS");
+    String reply=in.readLine();
+    if(reply!=null && reply.startsWith("READY|")) { String[] parts=reply.split("\\|",3); result="Connected to VRFlex ✓"+(parts.length==3?"\nSelected profile: "+parts[2]:""); }
+    else result="Unexpected response from Quest.";
    } catch(Exception e) { result="Connection failed. Check Wi-Fi, IP, and keep VRFlex open on Quest."; }
    final String message=result; runOnUiThread(()->{status.setText(message);connect.setEnabled(true);});
   });
