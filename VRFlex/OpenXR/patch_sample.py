@@ -122,7 +122,7 @@ insert = '''    void UpdateVrFlexMenu() {
         const bool show = tracked &&
             GetActionStateBoolean(actionMenuToggle_, leftHandPath_).currentState;
 
-        VRMenuObject* items[] = {
+        OVRFW::VRMenuObject* items[] = {
             menuTitle_, menuBody_, menuMovement_, menuControllers_, menuProfiles_, menuSettings_};
         for (VRMenuObject* item : items) {
             if (item != nullptr) item->SetVisible(show);
@@ -175,12 +175,12 @@ replace_once(
 
     OVRFW::ControllerRenderer controllerRenderL_;''',
 '''    OVRFW::TinyUI ui_;
-    VRMenuObject* menuTitle_{nullptr};
-    VRMenuObject* menuBody_{nullptr};
-    VRMenuObject* menuMovement_{nullptr};
-    VRMenuObject* menuControllers_{nullptr};
-    VRMenuObject* menuProfiles_{nullptr};
-    VRMenuObject* menuSettings_{nullptr};
+    OVRFW::VRMenuObject* menuTitle_{nullptr};
+    OVRFW::VRMenuObject* menuBody_{nullptr};
+    OVRFW::VRMenuObject* menuMovement_{nullptr};
+    OVRFW::VRMenuObject* menuControllers_{nullptr};
+    OVRFW::VRMenuObject* menuProfiles_{nullptr};
+    OVRFW::VRMenuObject* menuSettings_{nullptr};
 
     OVRFW::ControllerRenderer controllerRenderL_;''',
 "menu UI members")
