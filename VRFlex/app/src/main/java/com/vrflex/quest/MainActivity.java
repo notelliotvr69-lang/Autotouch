@@ -142,6 +142,8 @@ public class MainActivity extends Activity {
             slider("Right arm length","right_arm",-50,50,0,"%");
         } else {
             card("General","VRFlex preferences are stored locally on this headset.");
+            card("Phone companion","Connect your Android phone and Quest to the same Wi-Fi network. Enter this headset IP in VRFlex Mobile. Keep VRFlex open while connecting.");
+            card("Quest IP address",""+localIp()+":"+COMPANION_PORT);
             Button reset=new Button(this);reset.setText("Reset all profiles");reset.setAllCaps(false);
             reset.setOnClickListener(v->{prefs.edit().clear().apply();showTab(3);});content.addView(reset);
             card("Compatibility note","A companion APK cannot automatically alter another game's tracking. Live controls require a supported integration for each game.");
