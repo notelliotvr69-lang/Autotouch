@@ -51,14 +51,12 @@ extern "C" VRFLEX_API int32_t vrflex_movement_step(
     const float target_speed = std::clamp(input, -1.0f, 1.0f) * kMaxSpeed;
     const float rate = std::fabs(target_speed) > 0.001f
         ? kAcceleration : kDeceleration;
-    const float speed = std::hypot(state->velocity_x, state->velocity_z);
-    const float current_speed = std::copysign(speed, state->velocity_z == 0.0f
-        ? target_speed : -state->velocity_z);
-    const float next_speed = Approach(current_speed, target_speed, rate * dt);
-
     // OpenXR's conventional forward direction is -Z at zero yaw.
     const float direction_x = std::sin(head_yaw_radians);
     const float direction_z = -std::cos(head_yaw_radians);
+    const float current_speed =
+        state->velocity_x * direction_x + state->velocity_z * direction_z;
+    const float next_speed = Approach(current_speed, target_speed, rate * dt);
     state->velocity_x = direction_x * next_speed;
     state->velocity_z = direction_z * next_speed;
 
