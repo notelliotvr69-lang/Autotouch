@@ -64,14 +64,14 @@ public class MainActivity extends Activity {
         TextView ver=label("QUEST 3 • v0.2",12,true); ver.setTextColor(muted); header.addView(ver); root.addView(header);
         TextView sub=label("Game profiles • comfort controls",14,false); sub.setTextColor(muted); root.addView(sub);
         LinearLayout tabs=new LinearLayout(this); tabs.setPadding(0,16,0,12);
-        String[] names={"Library","Movement","Arms","General"};
+        String[] names={"Games (☰)","Mod Menu (Y)","Arms","General"};
         for(int i=0;i<names.length;i++){final int n=i; Button b=new Button(this); b.setText(names[i]); b.setTextSize(11); b.setAllCaps(false); b.setTextColor(Color.BLACK); b.setBackground(shape(accent,14));
             LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,50,1); p.setMargins(0,0,5,0); tabs.addView(b,p);
             b.setOnClickListener(v->{activeTab=n;showTab(n);});}
         root.addView(tabs);
         ScrollView scroll=new ScrollView(this); content=new LinearLayout(this); content.setOrientation(1); scroll.addView(content);
         root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
-        TextView foot=label("Profiles save locally • Game integrations are separate",10,false); foot.setTextColor(muted); foot.setPadding(0,12,0,0); root.addView(foot);
+        TextView foot=label("Profiles save locally • Y = Mod Menu • ☰ = Games",10,false); foot.setTextColor(muted); foot.setPadding(0,12,0,0); root.addView(foot);
         setContentView(root);
     }
     private void card(String title,String desc) {
@@ -107,13 +107,34 @@ public class MainActivity extends Activity {
         b.setOnClickListener(v->chooseGame(id));
         LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);p.setMargins(0,0,0,14);content.addView(box,p);
     }
+    private void selectProfile(String pkg,String name) {
+        selectedGame=pkg; selectedGameName=name;
+        prefs.edit().putString("selected_game",pkg).putString("selected_game_name",name).apply();
+    }
+    private void launchGame(String pkg,String name) {
+        // Save the selected profile before handing focus to the game.
+        selectProfile(pkg,name);
+        Intent game=getPackageManager().getLaunchIntentForPackage(pkg);
+        if(game!=null) {
+            try { startActivity(game); }
+            catch(Exception e) { Toast.makeText(this,"Could not launch "+name,Toast.LENGTH_SHORT).show(); }
+        } else Toast.makeText(this,"No launch activity found for "+name,Toast.LENGTH_SHORT).show();
+    }
+    private void addProfileControls() {
+        toggle("Enable VRFlex profile","Enable this game's saved profile.","enabled",false);
+        toggle("Sitting mode","Saved preference for a compatible seated-mode integration.","sitting",false);
+        slider("Forward / backward offset","offset",-100,100,0," cm");
+        slider("Movement speed","speed",1,100,25,"%");
+        slider("Left arm length","left_arm",-50,50,0,"%");
+        slider("Right arm length","right_arm",-50,50,0,"%");
+    }
     private void showTab(int tab) {
         content.removeAllViews();
         if(tab==0){
-            card("GAME LIBRARY","Choose a game to manage its independent VRFlex profile.");
+            card("GAME SWITCHER","Left Menu (☰) is the intended game-switcher shortcut. Choose a game below to load its profile and launch it.");
             gameCard("gorilla","Gorilla Tag","Quest game • Per-game settings profile");
             gameCard("gilla","GILLA","Quest game by Chase • Per-game settings profile");
-            card("INSTALLED QUEST APPS","Browse launchable apps installed on this headset and add a separate VRFlex settings profile.");
+            card("INSTALLED GAMES & APPS","Choose a profile or switch directly to another installed app. VRFlex saves the selected profile before launching.");
             Intent launcher=new Intent(Intent.ACTION_MAIN); launcher.addCategory(Intent.CATEGORY_LAUNCHER);
             List<ResolveInfo> installed=getPackageManager().queryIntentActivities(launcher,0);
             Collections.sort(installed,new Comparator<ResolveInfo>() {
@@ -128,35 +149,31 @@ public class MainActivity extends Activity {
                 final String name=app.loadLabel(getPackageManager()).toString();
                 LinearLayout item=new LinearLayout(this); item.setOrientation(1); item.setPadding(14,12,14,12); item.setBackground(shape(panel,16));
                 item.addView(label(name,15,true));
-                TextView detail=label(pkg+" • Profile only; no live integration",10,false); detail.setTextColor(muted); item.addView(detail);
+                TextView detail=label(pkg+" • Separate saved profile",10,false); detail.setTextColor(muted); item.addView(detail);
                 Button add=new Button(this); add.setAllCaps(false); add.setText(profiles.contains(pkg)?"Open VRFlex profile":"Add VRFlex profile");
                 add.setTextColor(Color.BLACK); add.setBackground(shape(accent,12));
-                add.setOnClickListener(v->{profiles.add(pkg);prefs.edit().putStringSet("game_profiles",new HashSet<>(profiles)).putString("selected_game",pkg).putString("selected_game_name",name).apply();selectedGame=pkg;selectedGameName=name;activeTab=1;showTab(1);});
+                add.setOnClickListener(v->{profiles.add(pkg);selectProfile(pkg,name);activeTab=1;showTab(1);});
                 item.addView(add);
                 Button launch=new Button(this); launch.setAllCaps(false); launch.setText("Launch "+name);
                 launch.setTextColor(Color.BLACK); launch.setBackground(shape(accent,12));
-                launch.setOnClickListener(v->{
-                    Intent game=getPackageManager().getLaunchIntentForPackage(pkg);
-                    if(game!=null) { try { startActivity(game); } catch(Exception e) { Toast.makeText(this,"Could not launch "+name,Toast.LENGTH_SHORT).show(); } }
-                    else Toast.makeText(this,"No launch activity found for "+name,Toast.LENGTH_SHORT).show();
-                });
+                launch.setOnClickListener(v->launchGame(pkg,name));
                 item.addView(launch);
                 LinearLayout.LayoutParams ip=new LinearLayout.LayoutParams(-1,-2);ip.setMargins(0,0,0,8);content.addView(item,ip);
             }
-            card("Integration status","The library and profile storage are implemented. Game hooks, the in-game Y-button overlay, and live movement are not installed yet; each game needs a compatible integration.");
+            card("CURRENT PROFILE SETTINGS","The same selected-game profile is available here and in the Mod Menu tab.");
+            addProfileControls();
+            card("BUTTON LAYOUT","Left Y = Mod Menu. Left Menu (☰) = Games / game switcher. Quest-wide controller interception still requires OS-supported input access or a game integration.");
         } else if(tab==1){
-            card(gameName()+" profile","Settings below are stored separately for this game.");
+            card(gameName()+" MOD MENU","Left Y is the intended shortcut for this menu. Settings are stored in the active game profile.");
             card("Selected game: "+gameName(),"Profile key: "+selectedGame);
-            toggle("Enable VRFlex profile","Turn this game's saved profile on or off.","enabled",false);
-            toggle("Sitting mode","Saved preference for a compatible seated-mode integration.","sitting",false);
-            slider("Forward / backward offset","offset",-100,100,0," cm");
-            slider("Movement speed","speed",1,100,25,"%");
-            card("Controls","Planned: hold controller trigger to move; release to stop. Hold Y to show the panel and release Y to hide it. These controls need a game-side integration.");
+            addProfileControls();
+            card("BUTTON LAYOUT","Left Y → Mod Menu. Left Menu (☰) → Games / game switcher. Quest-wide button delivery needs OS-supported input access or a game integration.");
             Button back=new Button(this);back.setText("Back to game library");back.setOnClickListener(v->showTab(0));content.addView(back);
         } else if(tab==2){
             card("Arm settings",gameName()+" profile");
             slider("Left arm length","left_arm",-50,50,0,"%");
             slider("Right arm length","right_arm",-50,50,0,"%");
+            card("SHORTCUTS","Left Y opens Mod Menu; left Menu (☰) opens Games when the active integration exposes those inputs.");
         } else {
             card("General","VRFlex preferences are stored locally on this headset.");
             card("Phone companion","Connect your Android phone and Quest to the same Wi-Fi network. Enter this headset IP in VRFlex Mobile. Keep VRFlex open while connecting.");
