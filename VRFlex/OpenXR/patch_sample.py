@@ -162,9 +162,9 @@ if n != 1:
 
 # Remove the sample's cube/tool world render; keep UI, controllers, and pointer beam.
 for line in [
-    "        toolRenderer_.Render(out.Surfaces);\\n",
-    "        cubeRenderer_.Render(out.Surfaces);\\n",
-    "        templateCubeRenderer_.Render(out.Surfaces);\\n",
+    "        toolRenderer_.Render(out.Surfaces);" + chr(10),
+    "        cubeRenderer_.Render(out.Surfaces);" + chr(10),
+    "        templateCubeRenderer_.Render(out.Surfaces);" + chr(10),
 ]:
     if line not in s:
         raise SystemExit(f"Missing render line: {line.strip()}")
