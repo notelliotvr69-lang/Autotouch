@@ -24,10 +24,12 @@ public class MainActivity extends Activity {
  }
  private void connectToQuest() {
   String host=ip.getText().toString().trim(); if(host.isEmpty()){status.setText("Enter the Quest IP address.");return;}
-  getPreferences(0).edit().putString("quest_ip",host).apply();\n  connect.setEnabled(false); status.setText("Connecting…");
+  getPreferences(0).edit().putString("quest_ip",host).apply();
+  connect.setEnabled(false); status.setText("Connecting…");
   io.execute(()->{
    String result;
-   try(Socket s=new Socket(host,47821)) {
+   try(Socket s=new Socket()) {
+    s.connect(new InetSocketAddress(host,47821),4000);
     s.setSoTimeout(4000); PrintWriter out=new PrintWriter(s.getOutputStream(),true);
     BufferedReader in=new BufferedReader(new InputStreamReader(s.getInputStream())); out.println("STATUS");
     String reply=in.readLine();
