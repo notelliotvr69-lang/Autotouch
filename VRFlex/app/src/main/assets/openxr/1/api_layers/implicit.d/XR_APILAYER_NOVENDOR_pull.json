@@ -1,0 +1,10 @@
+{
+  "file_format_version": "1.0.0",
+  "api_layer": {
+    "name": "XR_APILAYER_NOVENDOR_pull",
+    "library_path": "libXR_APILAYER_NOVENDOR_pull.so",
+    "api_version": "1.0",
+    "implementation_version": "1",
+    "description": "VRFlex Android port of the NOVENDOR forward-pull OpenXR API layer"
+  }
+}
