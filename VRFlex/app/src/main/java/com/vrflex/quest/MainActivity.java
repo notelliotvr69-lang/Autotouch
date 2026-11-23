@@ -14,137 +14,97 @@ public class MainActivity extends Activity {
     private SharedPreferences prefs;
     private LinearLayout content;
     private int activeTab = 0;
-    private final int bg = Color.rgb(10, 12, 20);
-    private final int panel = Color.rgb(24, 27, 40);
-    private final int accent = Color.rgb(125, 92, 255);
-    private final int text = Color.rgb(245, 246, 255);
-    private final int muted = Color.rgb(164, 171, 194);
+    private String selectedGame = "gorilla";
+    private final int bg = Color.rgb(10,12,20), panel = Color.rgb(24,27,40),
+        accent = Color.rgb(125,92,255), text = Color.rgb(245,246,255),
+        muted = Color.rgb(164,171,194);
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
         prefs = getSharedPreferences("vrflex", MODE_PRIVATE);
-        getWindow().setStatusBarColor(bg);
-        getWindow().setNavigationBarColor(bg);
-        buildShell();
-        showTab(0);
+        getWindow().setStatusBarColor(bg); getWindow().setNavigationBarColor(bg);
+        buildShell(); showTab(0);
     }
-
-    private GradientDrawable shape(int color, int radius) {
-        GradientDrawable d = new GradientDrawable();
-        d.setColor(color); d.setCornerRadius(radius);
-        return d;
+    private GradientDrawable shape(int c,int r) {
+        GradientDrawable d=new GradientDrawable(); d.setColor(c); d.setCornerRadius(r); return d;
     }
-
-    private TextView label(String value, int size, boolean bold) {
-        TextView t = new TextView(this);
-        t.setText(value); t.setTextColor(text); t.setTextSize(size);
-        if (bold) t.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        return t;
+    private TextView label(String s,int z,boolean bold) {
+        TextView t=new TextView(this); t.setText(s); t.setTextColor(text); t.setTextSize(z);
+        if(bold)t.setTypeface(Typeface.DEFAULT,Typeface.BOLD); return t;
     }
-
     private void buildShell() {
-        LinearLayout root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(28, 22, 28, 22);
-        root.setBackgroundColor(bg);
-        LinearLayout header = new LinearLayout(this);
-        header.setGravity(Gravity.CENTER_VERTICAL);
-        TextView brand = label("VRFLEX", 25, true);
-        header.addView(brand, new LinearLayout.LayoutParams(0, -2, 1));
-        TextView version = label("QUEST 3  •  v0.1.0", 12, true);
-        version.setTextColor(muted); header.addView(version);
-        root.addView(header);
-        TextView subtitle = label("A safe, standalone Quest utility", 14, false);
-        subtitle.setTextColor(muted);
-        root.addView(subtitle);
-        LinearLayout tabs = new LinearLayout(this);
-        tabs.setPadding(0, 18, 0, 14);
-        String[] names = {"Movement", "Arms", "General"};
-        for (int i = 0; i < names.length; i++) {
-            final int index = i;
-            Button b = new Button(this);
-            b.setText(names[i]); b.setAllCaps(false); b.setTextColor(text);
-            b.setBackground(shape(panel, 18));
-            LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0, 54, 1);
-            p.setMargins(0, 0, 8, 0);
-            tabs.addView(b, p);
-            b.setOnClickListener(v -> { activeTab = index; showTab(index); });
-        }
+        LinearLayout root=new LinearLayout(this); root.setOrientation(1); root.setPadding(20,18,20,18); root.setBackgroundColor(bg);
+        LinearLayout header=new LinearLayout(this); header.setGravity(Gravity.CENTER_VERTICAL);
+        header.addView(label("VRFLEX",25,true),new LinearLayout.LayoutParams(0,-2,1));
+        TextView ver=label("QUEST 3 • v0.2",12,true); ver.setTextColor(muted); header.addView(ver); root.addView(header);
+        TextView sub=label("Game profiles • comfort controls",14,false); sub.setTextColor(muted); root.addView(sub);
+        LinearLayout tabs=new LinearLayout(this); tabs.setPadding(0,16,0,12);
+        String[] names={"Library","Movement","Arms","General"};
+        for(int i=0;i<names.length;i++){final int n=i; Button b=new Button(this); b.setText(names[i]); b.setTextSize(11); b.setAllCaps(false); b.setTextColor(text); b.setBackground(shape(panel,14));
+            LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,50,1); p.setMargins(0,0,5,0); tabs.addView(b,p);
+            b.setOnClickListener(v->{activeTab=n;showTab(n);});}
         root.addView(tabs);
-        ScrollView scroll = new ScrollView(this);
-        content = new LinearLayout(this);
-        content.setOrientation(LinearLayout.VERTICAL);
-        scroll.addView(content);
-        root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
-        TextView foot = label("Prototype build • App-local features only • No system or Guardian changes", 11, false);
-        foot.setTextColor(muted); foot.setPadding(0, 14, 0, 0);
-        root.addView(foot);
+        ScrollView scroll=new ScrollView(this); content=new LinearLayout(this); content.setOrientation(1); scroll.addView(content);
+        root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
+        TextView foot=label("Profiles save locally • Game integrations are separate",10,false); foot.setTextColor(muted); foot.setPadding(0,12,0,0); root.addView(foot);
         setContentView(root);
     }
-
-    private void card(String title, String description) {
-        LinearLayout box = new LinearLayout(this);
-        box.setOrientation(LinearLayout.VERTICAL); box.setPadding(20, 18, 20, 18);
-        box.setBackground(shape(panel, 22));
-        TextView h = label(title, 18, true);
-        TextView d = label(description, 13, false); d.setTextColor(muted);
-        box.addView(h); box.addView(d);
-        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, -2);
-        p.setMargins(0, 0, 0, 14); content.addView(box, p);
+    private void card(String title,String desc) {
+        LinearLayout box=new LinearLayout(this); box.setOrientation(1); box.setPadding(18,16,18,16); box.setBackground(shape(panel,20));
+        box.addView(label(title,17,true)); TextView d=label(desc,12,false); d.setTextColor(muted); box.addView(d);
+        LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2); p.setMargins(0,0,0,12); content.addView(box,p);
     }
-
-    private void addToggle(String title, String desc, String key, boolean initial) {
-        card(title, desc);
-        Switch sw = new Switch(this); sw.setText("Enabled"); sw.setTextColor(text);
-        sw.setChecked(prefs.getBoolean(key, initial));
-        sw.setOnCheckedChangeListener((b, checked) -> prefs.edit().putBoolean(key, checked).apply());
-        content.addView(sw);
-        space();
+    private String key(String k){return selectedGame+"_"+k;}
+    private void toggle(String title,String desc,String k,boolean init) {
+        card(title,desc); Switch s=new Switch(this); s.setText("Enabled"); s.setTextColor(text);
+        s.setChecked(prefs.getBoolean(key(k),init)); s.setOnCheckedChangeListener((b,v)->prefs.edit().putBoolean(key(k),v).apply()); content.addView(s); space();
     }
-
-    private void addSlider(String title, String key, int min, int max, int initial, String unit) {
-        card(title, "Saved setting preview. Does not currently alter tracking in other apps.");
-        int value = prefs.getInt(key, initial);
-        TextView current = label(value + unit, 16, true);
-        content.addView(current);
-        SeekBar seek = new SeekBar(this); seek.setMax(max - min); seek.setProgress(value - min);
-        content.addView(seek);
-        seek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            public void onProgressChanged(SeekBar b, int progress, boolean user) {
-                int v = progress + min; current.setText(v + unit);
-                if (user) prefs.edit().putInt(key, v).apply();
-            }
-            public void onStartTrackingTouch(SeekBar b) {}
-            public void onStopTrackingTouch(SeekBar b) {}
-        });
-        space();
+    private void slider(String title,String k,int min,int max,int init,String unit) {
+        card(title,"Saved in the "+gameName()+" profile. Requires a compatible game integration to take effect.");
+        int val=prefs.getInt(key(k),init); TextView now=label(val+unit,15,true); content.addView(now);
+        SeekBar seek=new SeekBar(this); seek.setMax(max-min); seek.setProgress(val-min); content.addView(seek);
+        seek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
+            public void onProgressChanged(SeekBar b,int p,boolean u){int v=p+min;now.setText(v+unit);if(u)prefs.edit().putInt(key(k),v).apply();}
+            public void onStartTrackingTouch(SeekBar b){} public void onStopTrackingTouch(SeekBar b){}
+        }); space();
     }
-
-    private void space() {
-        View v = new View(this);
-        content.addView(v, new LinearLayout.LayoutParams(1, 12));
+    private void space(){View v=new View(this);content.addView(v,new LinearLayout.LayoutParams(1,8));}
+    private String gameName(){return selectedGame.equals("gorilla")?"Gorilla Tag":"GILLA";}
+    private void chooseGame(String id) {
+        selectedGame=id; activeTab=1; showTab(1);
     }
-
+    private void gameCard(String id,String name,String detail) {
+        LinearLayout box=new LinearLayout(this); box.setOrientation(1); box.setPadding(18,16,18,16); box.setBackground(shape(panel,20));
+        box.addView(label(name,19,true)); TextView d=label(detail,12,false);d.setTextColor(muted);box.addView(d);
+        Button b=new Button(this);b.setText("Open "+name+" profile");b.setAllCaps(false);b.setTextColor(text);b.setBackground(shape(accent,14));box.addView(b);
+        b.setOnClickListener(v->chooseGame(id));
+        LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);p.setMargins(0,0,0,14);content.addView(box,p);
+    }
     private void showTab(int tab) {
         content.removeAllViews();
-        if (tab == 0) {
-            card("Movement", "Configure a future app-local reference-space offset. Guardian boundaries are never modified.");
-            addToggle("Movement offset", "Master switch for the app-local movement feature.", "move_enabled", false);
-            addSlider("Offset amount", "move_offset", -100, 100, 0, " cm");
-            addSlider("Adjustment speed", "move_speed", 1, 100, 25, "%");
-            card("Status", "This first build saves your settings only. OpenXR pose adjustment is not implemented yet.");
-        } else if (tab == 1) {
-            card("Arms", "Controller pose adjustments are planned for supported app-local OpenXR sessions.");
-            addSlider("Left arm length", "left_arm", -50, 50, 0, "%");
-            addSlider("Right arm length", "right_arm", -50, 50, 0, "%");
-            card("Compatibility", "A normal Quest app cannot rewrite controller poses inside unrelated apps. No cross-app tracking hooks are used.");
+        if(tab==0){
+            card("GAME LIBRARY","Choose a game to manage its independent VRFlex profile.");
+            gameCard("gorilla","Gorilla Tag","Quest game • Per-game settings profile");
+            gameCard("gilla","GILLA","Quest game by Chase • Per-game settings profile");
+            card("Integration status","The library and profile storage are implemented. Game hooks, the in-game Y-button overlay, and live movement are not installed yet; each game needs a compatible integration.");
+        } else if(tab==1){
+            card(gameName()+" profile","Settings below are stored separately for this game.");
+            card("Selected game: "+gameName(),"Profile key: "+selectedGame);
+            toggle("Enable VRFlex profile","Turn this game's saved profile on or off.","enabled",false);
+            toggle("Sitting mode","Saved preference for a compatible seated-mode integration.","sitting",false);
+            slider("Forward / backward offset","offset",-100,100,0," cm");
+            slider("Movement speed","speed",1,100,25,"%");
+            card("Controls","Planned: hold controller trigger to move; release to stop. Hold Y to show the panel and release Y to hide it. These controls need a game-side integration.");
+            Button back=new Button(this);back.setText("Back to game library");back.setOnClickListener(v->showTab(0));content.addView(back);
+        } else if(tab==2){
+            card("Arm settings",gameName()+" profile");
+            slider("Left arm length","left_arm",-50,50,0,"%");
+            slider("Right arm length","right_arm",-50,50,0,"%");
         } else {
-            card("General", "Preferences are stored locally on this headset.");
-            addToggle("Sitting mode", "Saved preference for a future supported seated reference-space mode.", "sitting", false);
-            Button reset = new Button(this); reset.setText("Reset all settings"); reset.setAllCaps(false);
-            reset.setOnClickListener(v -> { prefs.edit().clear().apply(); showTab(2); });
-            content.addView(reset);
-            card("Safety", "VRFlex does not require root, bootloader unlocking, firmware flashing, or Guardian changes.");
+            card("General","VRFlex preferences are stored locally on this headset.");
+            Button reset=new Button(this);reset.setText("Reset all profiles");reset.setAllCaps(false);
+            reset.setOnClickListener(v->{prefs.edit().clear().apply();showTab(3);});content.addView(reset);
+            card("Compatibility note","A companion APK cannot automatically alter another game's tracking. Live controls require a supported integration for each game.");
         }
     }
 }
