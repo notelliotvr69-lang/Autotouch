@@ -1,0 +1,44 @@
+name: Build VRFlex Mobile APK
+on:
+ push:
+  branches: [main]
+  paths: ['VRFlexMobile/**', '.github/workflows/vrflex-mobile-apk.yml']
+ pull_request:
+  paths: ['VRFlexMobile/**', '.github/workflows/vrflex-mobile-apk.yml']
+ workflow_dispatch:
+permissions:
+ contents: write
+jobs:
+ build:
+  runs-on: ubuntu-latest
+  steps:
+   - uses: actions/checkout@v4
+   - uses: actions/setup-java@v4
+     with: {distribution: temurin, java-version: '17'}
+   - uses: gradle/actions/setup-gradle@v4
+     with: {gradle-version: '8.9'}
+   - name: Install Android SDK
+     run: |
+      yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
+      "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0"
+   - name: Build phone companion
+     working-directory: VRFlexMobile
+     run: gradle --no-daemon --stacktrace assembleDebug
+   - uses: actions/upload-artifact@v4
+     with:
+      name: VRFlex-Mobile-debug-apk
+      path: VRFlexMobile/app/build/outputs/apk/debug/app-debug.apk
+      if-no-files-found: error
+   - name: Publish companion APK
+     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+     run: |
+      mkdir -p dist
+      cp VRFlexMobile/app/build/outputs/apk/debug/app-debug.apk dist/VRFlex-Mobile.apk
+   - uses: softprops/action-gh-release@v2
+     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+     with:
+      tag_name: vrflex-latest
+      name: VRFlex latest build
+      prerelease: true
+      make_latest: false
+      files: dist/VRFlex-Mobile.apk
