@@ -1,0 +1,42 @@
+name: Build VRFlex Android native library
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'VRFlex/native/**'
+      - '.github/workflows/vrflex-native-android.yml'
+  pull_request:
+    paths:
+      - 'VRFlex/native/**'
+      - '.github/workflows/vrflex-native-android.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Android NDK
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;27.0.12077973" "cmake;3.22.1"
+      - name: Configure Android ARM64 build
+        run: |
+          cmake -S VRFlex/native -B build/vrflex-native \
+            -DCMAKE_TOOLCHAIN_FILE="$ANDROID_HOME/ndk/27.0.12077973/build/cmake/android.toolchain.cmake" \
+            -DANDROID_ABI=arm64-v8a \
+            -DANDROID_PLATFORM=android-29 \
+            -DCMAKE_BUILD_TYPE=Release
+      - name: Compile shared library
+        run: cmake --build build/vrflex-native --parallel 2
+      - name: Upload Quest ARM64 library
+        uses: actions/upload-artifact@v4
+        with:
+          name: VRFlex-Android-arm64
+          path: build/vrflex-native/libvrflex_movement.so
+          if-no-files-found: error
+          retention-days: 30
