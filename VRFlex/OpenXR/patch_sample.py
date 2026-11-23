@@ -81,6 +81,16 @@ replace_once(
 '''        SetupMenuPanels();''',
 "remove sample panels")
 
+# These sample-only labels are no longer used after removing its demo panels.
+for declaration in [
+    "    OVRFW::VRMenuObject* boxCountLabel_{nullptr};\n",
+    "    OVRFW::VRMenuObject* currentInteractionProfileText_{nullptr};\n",
+    "    OVRFW::VRMenuObject* boxColorLabel_{nullptr};\n",
+]:
+    if s.count(declaration) != 1:
+        raise SystemExit("Expected one unused sample field declaration: " + declaration.strip())
+    s = s.replace(declaration, "", 1)
+
 # Replace the sample's large world-fixed menu with a small controller-attached VRFlex panel.
 pattern = re.compile(r'    void SetupMenuPanels\(\) \{.*?\n    \}\n\n    void CreateSampleDescriptionPanel\(\) \{.*?\n    \}', re.S)
 new_methods = '''    void SetupMenuPanels() {
