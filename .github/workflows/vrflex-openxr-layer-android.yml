@@ -1,0 +1,50 @@
+name: Build VRFlex Android OpenXR API layer
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'VRFlex/OpenXRLayer/**'
+      - 'VRFlex/app/src/main/assets/openxr/**'
+      - '.github/workflows/vrflex-openxr-layer-android.yml'
+  pull_request:
+    paths:
+      - 'VRFlex/OpenXRLayer/**'
+      - 'VRFlex/app/src/main/assets/openxr/**'
+      - '.github/workflows/vrflex-openxr-layer-android.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch Khronos OpenXR headers
+        run: |
+          git clone --depth 1 https://github.com/KhronosGroup/OpenXR-SDK.git deps/OpenXR-SDK
+      - name: Configure Android ARM64 layer
+        run: |
+          cmake -S VRFlex/OpenXRLayer -B build/openxr-layer \
+            -DOPENXR_SDK_INCLUDE="$GITHUB_WORKSPACE/deps/OpenXR-SDK/include" \
+            -DCMAKE_TOOLCHAIN_FILE="$ANDROID_HOME/ndk/27.0.12077973/build/cmake/android.toolchain.cmake" \
+            -DANDROID_ABI=arm64-v8a \
+            -DANDROID_PLATFORM=android-29 \
+            -DCMAKE_BUILD_TYPE=Release
+      - name: Build layer
+        run: cmake --build build/openxr-layer --parallel 2
+      - name: Package APK-native library and manifest
+        run: |
+          mkdir -p build/vrflex-openxr-layer/lib/arm64-v8a
+          mkdir -p build/vrflex-openxr-layer/assets/openxr/1/api_layers/implicit.d
+          cp build/openxr-layer/libXR_APILAYER_NOVENDOR_pull.so build/vrflex-openxr-layer/lib/arm64-v8a/
+          cp VRFlex/app/src/main/assets/openxr/1/api_layers/implicit.d/XR_APILAYER_NOVENDOR_pull.json build/vrflex-openxr-layer/assets/openxr/1/api_layers/implicit.d/
+      - name: Upload Android API layer
+        uses: actions/upload-artifact@v4
+        with:
+          name: NOVENDOR-OpenXR-Android-arm64
+          path: build/vrflex-openxr-layer/
+          if-no-files-found: error
+          retention-days: 30
