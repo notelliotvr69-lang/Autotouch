@@ -1,8 +1,9 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="theme-color" content="#0a0c14"><meta name="description" content="VRFlex is a Meta Quest companion with per-game profiles and an OS-supported panel launch path.">
-<title>VRFlex — Quest companion</title>
+<meta name="theme-color" content="#0a0c14">
+<meta name="description" content="VRFlex is a rootless wireless VR developer toolkit for Meta Quest, with local-IP companion control, profiles, and integration tools.">
+<title>VRFlex — Wireless VR developer toolkit</title>
 <style>
 :root{color-scheme:dark;--bg:#0a0c14;--panel:#171b2a;--line:#30364b;--text:#f5f6ff;--muted:#a4abc1;--accent:#8062ff;--warn:#f0bd62;--good:#83d6ae}
 *{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 15% 0%,#332568 0,transparent 42%),var(--bg);color:var(--text);font:16px system-ui,Segoe UI,sans-serif;padding:28px}
@@ -10,24 +11,26 @@ main{max-width:980px;margin:auto}.brand{display:flex;gap:16px;align-items:center
 h1{font-size:clamp(2.8rem,8vw,5rem);letter-spacing:-.06em;line-height:1;margin:0}.muted{color:var(--muted)}.panel{background:#171b2aeF;border:1px solid var(--line);border-radius:24px;padding:26px;margin:18px 0}.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}.tile{background:#20253a;border:1px solid var(--line);border-radius:18px;padding:18px}.tile h2{margin:0 0 8px;font-size:1.1rem}.button{display:inline-block;background:var(--accent);color:white;text-decoration:none;padding:12px 16px;border-radius:12px;font-weight:750;margin:10px 8px 0 0}.secondary{background:#30364b}.tag{display:inline-block;border:1px solid var(--line);border-radius:99px;padding:7px 11px;margin:4px;color:#d7d9e9;font-size:.85rem}.notice{border-left:4px solid var(--warn);padding:12px 16px;background:#282319;border-radius:8px;color:#f4e4c5}.good{border-left:4px solid var(--good);padding:12px 16px;background:#172820;border-radius:8px;color:#d7f4e4}a{color:#c6baff}footer{padding:10px 2px 30px}
 @media(max-width:680px){body{padding:16px}.grid{grid-template-columns:1fr}.brand{margin-top:12px}}
 </style></head><body><main>
-<div class="brand"><div class="logo">V</div><div><h1>VRFlex</h1><div class="muted">Meta Quest companion · Rootless development build</div></div></div>
-<section class="panel"><h2>Quest OS panel launch</h2>
-<p class="good"><strong>New:</strong> VRFlex now declares Meta Horizon OS's documented 2D overlay-launch activity category. On supported Horizon OS versions (v69+), you can launch the VRFlex panel from the Quest app/overlay launch flow while an immersive app is running.</p>
-<p class="muted">This is an OS-managed panel, not a custom always-on-top Android window. The operating system controls when it opens and where it is placed.</p>
-<div><span class="tag">Quest 3</span><span class="tag">OS-managed panel</span><span class="tag">App library</span><span class="tag">Per-game profiles</span><span class="tag">Wireless phone companion</span></div></section>
-<section class="panel"><h2>What works now</h2><div class="grid">
-<article class="tile"><h2>App library</h2><p class="muted">Browse launcher-visible apps on the headset and keep separate VRFlex profiles.</p></article>
-<article class="tile"><h2>Profile controls</h2><p class="muted">Store sitting preference, movement values, and arm settings locally per selected game. These values need a compatible game adapter to affect gameplay.</p></article>
-<article class="tile"><h2>OS overlay launch</h2><p class="muted">The app manifest includes Meta's documented OVERLAY_LAUNCHER category for a 2D panel launched over an immersive app on supported Horizon OS versions.</p></article>
-<article class="tile"><h2>Wireless companion</h2><p class="muted">Connect an Android phone and Quest over the same Wi-Fi network using the headset's local IP. No USB ADB workflow.</p></article>
+<div class="brand"><div class="logo">V</div><div><h1>VRFlex</h1><div class="muted">Wireless VR developer toolkit · Rootless by design</div></div></div>
+<section class="panel"><h2>Developer tools for your Quest, connected over Wi-Fi.</h2>
+<p class="muted">VRFlex is being built as a wireless companion toolkit—not just a settings app. The phone and headset communicate over your local network, with no USB ADB workflow. The goal is to provide useful developer-style configuration and diagnostics without rooting the headset or replacing Horizon OS files.</p>
+<div><span class="tag">Meta Quest 3</span><span class="tag">Local IP connection</span><span class="tag">Per-game profiles</span><span class="tag">Integration API</span><span class="tag">No root</span></div>
+</section>
+<section class="panel"><h2>Toolkit modules</h2><div class="grid">
+<article class="tile"><h2>Wireless link</h2><p class="muted">A direct phone-to-Quest TCP connection over the same Wi-Fi network. Current protocol supports a basic connection and status handshake; remote profile operations are still being developed.</p></article>
+<article class="tile"><h2>Game library & profiles</h2><p class="muted">Keep independent local profiles for Gorilla Tag, GILLA, and other launcher-visible apps. Saved values only affect gameplay when a compatible integration consumes them.</p></article>
+<article class="tile"><h2>Developer integration layer</h2><p class="muted">A versioned adapter contract is in the project for future supported game integrations. It separates profile settings from actual live controls and checks declared capabilities.</p></article>
+<article class="tile"><h2>Rootless system</h2><p class="muted">No root, bootloader unlocking, firmware flashing, protected partition writes, system APK replacement, or hidden shell commands.</p></article>
 </div></section>
-<section class="panel"><h2>Downloads</h2><p class="muted">Install the latest published VRFlex APK on your Quest. The release is updated by the repository's APK build workflow.</p>
-<a class="button" href="https://github.com/notelliotvr69-lang/Autotouch/releases/download/vrflex-latest/VRFlex.apk">Download VRFlex APK</a>
-<a class="button secondary" href="https://github.com/notelliotvr69-lang/Autotouch/releases/download/vrflex-latest/VRFlex-Mobile.apk">Download VRFlex Mobile</a>
+<section class="panel"><h2>Downloads</h2><p class="muted">Install the latest published builds. APK links update when their GitHub Actions workflows finish successfully.</p>
+<a class="button" href="https://github.com/notelliotvr69-lang/Autotouch/releases/download/vrflex-latest/VRFlex.apk">Download Quest APK</a>
+<a class="button secondary" href="https://github.com/notelliotvr69-lang/Autotouch/releases/download/vrflex-latest/VRFlex-Mobile.apk">Download Android companion</a>
 <a class="button secondary" href="https://github.com/notelliotvr69-lang/Autotouch/releases/tag/vrflex-latest">Release details</a>
-<p class="muted">If the latest build is not published yet, check the <a href="https://github.com/notelliotvr69-lang/Autotouch/actions/workflows/vrflex-apk.yml">APK build workflow</a>.</p></section>
-<section class="panel"><h2>What the OS does not expose to this app</h2>
-<p class="notice"><strong>Hold Y to summon VRFlex at any time and pin it to the left controller are not available through the documented public panel-launch API.</strong> The OS overlay-launch category allows a user-initiated panel launch; it does not grant global controller-button interception, left-hand anchoring, or universal tracking modification. A hold-Y shortcut and hand-following panel therefore remain unimplemented. Those behaviors would need an official system API or cooperation from each game's integration.</p>
-<p class="muted">VRFlex does not use root, bootloader changes, firmware flashing, protected system writes, or replacement of Horizon OS files.</p></section>
+<p class="muted">Build status: <a href="https://github.com/notelliotvr69-lang/Autotouch/actions/workflows/vrflex-apk.yml">Quest APK workflow</a> · <a href="https://github.com/notelliotvr69-lang/Autotouch/actions/workflows/vrflex-mobile-apk.yml">Mobile APK workflow</a></p>
+</section>
+<section class="panel"><h2>Honest capability status</h2>
+<p class="good">Implemented: local profiles, launcher-visible app library, profile export, basic Wi-Fi status endpoint, and a game-integration interface contract.</p>
+<p class="notice">Not implemented: universal Quest-wide controller remapping, system-wide tracking offsets, global hold-Y interception, or automatic modification of other games. OpenXR input and tracking APIs operate within the app that owns the OpenXR session; live features need supported OS APIs or a compatible game adapter. A wireless IP connection does not grant system privileges.</p>
+</section>
 <footer class="muted">VRFlex is an independent project within the AutoTouch repository. Not affiliated with or endorsed by Meta.</footer>
 </main></body></html>
