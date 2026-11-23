@@ -12,6 +12,10 @@ on:
       - '.github/workflows/vrflex-apk.yml'
   workflow_dispatch:
 
+concurrency:
+  group: vrflex-quest-build
+  cancel-in-progress: true
+
 permissions:
   contents: write
 
