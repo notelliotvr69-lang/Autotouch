@@ -2,7 +2,7 @@ name: Build VRFlex APK
 
 on:
   push:
-    branches: [vrflex-initial, main]
+    branches: [main]
     paths:
       - 'VRFlex/**'
       - '.github/workflows/vrflex-apk.yml'
@@ -13,7 +13,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -34,9 +34,20 @@ jobs:
       - name: Build debug APK
         working-directory: VRFlex
         run: gradle --no-daemon --stacktrace assembleDebug
-      - uses: actions/upload-artifact@v4
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
         with:
           name: VRFlex-debug-apk
           path: VRFlex/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
+      - name: Publish latest APK download
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: vrflex-latest
+          name: VRFlex latest build
+          prerelease: true
+          make_latest: false
+          files: VRFlex/app/build/outputs/apk/debug/app-debug.apk
+          fail_on_unmatched_files: true
