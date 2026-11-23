@@ -18,6 +18,14 @@ import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.io.PrintWriter;
+import java.net.InetAddress;
+import java.net.NetworkInterface;
+import java.util.Enumeration;
 
 public class MainActivity extends Activity {
     private SharedPreferences prefs;
@@ -25,6 +33,8 @@ public class MainActivity extends Activity {
     private int activeTab = 0;
     private String selectedGame = "gorilla";
     private String selectedGameName = "Gorilla Tag";
+    private ServerSocket companionServer;
+    private static final int COMPANION_PORT=47821;
     private final int bg = Color.rgb(10,12,20), panel = Color.rgb(24,27,40),
         accent = Color.rgb(125,92,255), text = Color.rgb(245,246,255),
         muted = Color.rgb(164,171,194);
@@ -33,7 +43,7 @@ public class MainActivity extends Activity {
         super.onCreate(state);
         prefs = getSharedPreferences("vrflex", MODE_PRIVATE);
         getWindow().setStatusBarColor(bg); getWindow().setNavigationBarColor(bg);
-        buildShell(); showTab(0);
+        buildShell(); startCompanionServer(); showTab(0);
     }
     private GradientDrawable shape(int c,int r) {
         GradientDrawable d=new GradientDrawable(); d.setColor(c); d.setCornerRadius(r); return d;
@@ -136,5 +146,34 @@ public class MainActivity extends Activity {
             reset.setOnClickListener(v->{prefs.edit().clear().apply();showTab(3);});content.addView(reset);
             card("Compatibility note","A companion APK cannot automatically alter another game's tracking. Live controls require a supported integration for each game.");
         }
+    }
+
+    private String localIp() {
+        try {
+            for (Enumeration<NetworkInterface> e=NetworkInterface.getNetworkInterfaces();e.hasMoreElements();) {
+                NetworkInterface n=e.nextElement();
+                for (Enumeration<InetAddress> a=n.getInetAddresses();a.hasMoreElements();) {
+                    InetAddress ip=a.nextElement();
+                    if(!ip.isLoopbackAddress() && ip instanceof java.net.Inet4Address) return ip.getHostAddress();
+                }
+            }
+        } catch(Exception ignored) {}
+        return "Connect to Wi-Fi";
+    }
+    private void startCompanionServer() {
+        Thread t=new Thread(() -> {
+            try(ServerSocket server=new ServerSocket(COMPANION_PORT)) {
+                while(!server.isClosed()) {
+                    try(Socket client=server.accept();
+                        BufferedReader in=new BufferedReader(new InputStreamReader(client.getInputStream()));
+                        PrintWriter out=new PrintWriter(client.getOutputStream(),true)) {
+                        String command=in.readLine();
+                        if("PING".equals(command)) out.println("VRFLEX_READY");
+                        else out.println("UNSUPPORTED");
+                    } catch(Exception ignored) {}
+                }
+            } catch(Exception ignored) {}
+        });
+        t.setDaemon(true); t.start();
     }
 }
