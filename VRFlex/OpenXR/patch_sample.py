@@ -124,7 +124,7 @@ insert = '''    void UpdateVrFlexMenu() {
 
         OVRFW::VRMenuObject* items[] = {
             menuTitle_, menuBody_, menuMovement_, menuControllers_, menuProfiles_, menuSettings_};
-        for (VRMenuObject* item : items) {
+        for (OVRFW::VRMenuObject* item : items) {
             if (item != nullptr) item->SetVisible(show);
         }
         if (!show) return;
