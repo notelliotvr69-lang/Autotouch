@@ -130,7 +130,7 @@ insert = '''    void UpdateVrFlexMenu() {
         if (!show) return;
 
         const OVR::Posef handPose = FromXrPosef(locationGripLeft_.pose);
-        const auto place = [&handPose](VRMenuObject* item, float y, float z) {
+        const auto place = [&handPose](OVRFW::VRMenuObject* item, float y, float z) {
             const OVR::Vector3f offset = handPose.Rotation * OVR::Vector3f(0.0f, y, z);
             item->SetLocalPosition(handPose.Translation + offset);
             item->SetLocalRotation(handPose.Rotation);
