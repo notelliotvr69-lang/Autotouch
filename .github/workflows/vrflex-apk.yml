@@ -41,6 +41,9 @@ jobs:
           path: VRFlex/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
+      - name: Prepare stable APK filename
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: cp VRFlex/app/build/outputs/apk/debug/app-debug.apk VRFlex/app/build/outputs/apk/debug/VRFlex.apk
       - name: Publish latest APK download
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
@@ -49,5 +52,5 @@ jobs:
           name: VRFlex latest build
           prerelease: true
           make_latest: false
-          files: VRFlex/app/build/outputs/apk/debug/app-debug.apk
+          files: VRFlex/app/build/outputs/apk/debug/VRFlex.apk
           fail_on_unmatched_files: true
