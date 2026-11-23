@@ -9,12 +9,22 @@ import android.os.Bundle;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.*;
+import android.content.Intent;
+import android.content.pm.ApplicationInfo;
+import android.content.pm.ResolveInfo;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 
 public class MainActivity extends Activity {
     private SharedPreferences prefs;
     private LinearLayout content;
     private int activeTab = 0;
     private String selectedGame = "gorilla";
+    private String selectedGameName = "Gorilla Tag";
     private final int bg = Color.rgb(10,12,20), panel = Color.rgb(24,27,40),
         accent = Color.rgb(125,92,255), text = Color.rgb(245,246,255),
         muted = Color.rgb(164,171,194);
@@ -69,9 +79,9 @@ public class MainActivity extends Activity {
         }); space();
     }
     private void space(){View v=new View(this);content.addView(v,new LinearLayout.LayoutParams(1,8));}
-    private String gameName(){return selectedGame.equals("gorilla")?"Gorilla Tag":"GILLA";}
+    private String gameName(){return selectedGame.equals("gorilla")?"Gorilla Tag":selectedGame.equals("gilla")?"GILLA":selectedGameName;}
     private void chooseGame(String id) {
-        selectedGame=id; activeTab=1; showTab(1);
+        selectedGame=id; selectedGameName=id.equals("gorilla")?"Gorilla Tag":id.equals("gilla")?"GILLA":selectedGameName; activeTab=1; showTab(1);
     }
     private void gameCard(String id,String name,String detail) {
         LinearLayout box=new LinearLayout(this); box.setOrientation(1); box.setPadding(18,16,18,16); box.setBackground(shape(panel,20));
@@ -86,6 +96,26 @@ public class MainActivity extends Activity {
             card("GAME LIBRARY","Choose a game to manage its independent VRFlex profile.");
             gameCard("gorilla","Gorilla Tag","Quest game • Per-game settings profile");
             gameCard("gilla","GILLA","Quest game by Chase • Per-game settings profile");
+            card("INSTALLED QUEST APPS","Browse launchable apps installed on this headset and add a separate VRFlex settings profile.");
+            Intent launcher=new Intent(Intent.ACTION_MAIN); launcher.addCategory(Intent.CATEGORY_LAUNCHER);
+            List<ResolveInfo> installed=getPackageManager().queryIntentActivities(launcher,0);
+            Collections.sort(installed,new Comparator<ResolveInfo>() {
+                public int compare(ResolveInfo a,ResolveInfo b) {
+                    return a.loadLabel(getPackageManager()).toString().compareToIgnoreCase(b.loadLabel(getPackageManager()).toString());
+                }
+            });
+            Set<String> profiles=prefs.getStringSet("game_profiles",new HashSet<>());
+            for(ResolveInfo app:installed) {
+                if(app.activityInfo==null || app.activityInfo.packageName.equals(getPackageName())) continue;
+                final String pkg=app.activityInfo.packageName;
+                final String name=app.loadLabel(getPackageManager()).toString();
+                LinearLayout item=new LinearLayout(this); item.setOrientation(1); item.setPadding(14,12,14,12); item.setBackground(shape(panel,16));
+                item.addView(label(name,15,true));
+                TextView detail=label(pkg+" • Profile only; no live integration",10,false); detail.setTextColor(muted); item.addView(detail);
+                Button add=new Button(this); add.setAllCaps(false); add.setText(profiles.contains(pkg)?"Open profile":"Add profile"); add.setOnClickListener(v->{selectedGame=pkg;selectedGameName=name;activeTab=1;showTab(1);});
+                item.addView(add);
+                LinearLayout.LayoutParams ip=new LinearLayout.LayoutParams(-1,-2);ip.setMargins(0,0,0,8);content.addView(item,ip);
+            }
             card("Integration status","The library and profile storage are implemented. Game hooks, the in-game Y-button overlay, and live movement are not installed yet; each game needs a compatible integration.");
         } else if(tab==1){
             card(gameName()+" profile","Settings below are stored separately for this game.");
