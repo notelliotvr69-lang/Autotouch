@@ -1,25 +1,25 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="theme-color" content="#0a0c14">
-<meta name="description" content="VRFlex is a standalone OpenXR VR developer environment for Meta Quest, with a controller-attached menu and local profiles.">
-<title>VRFlex — Standalone VR developer menu</title>
+<meta name="theme-color" content="#ff8c00">
+<meta name="description" content="VRFlex is a Quest launcher prototype with per-game profiles, a Games switcher, and a Mod Menu.">
+<title>VRFlex — Quest Game Switcher & Mod Menu</title>
 <style>
-:root{color-scheme:dark;--bg:#0a0c14;--panel:#171b2a;--line:#30364b;--text:#f5f6ff;--muted:#a4abc1;--accent:#8062ff;--warn:#f0bd62;--good:#83d6ae}
-*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 15% 0%,#332568 0,transparent 42%),var(--bg);color:var(--text);font:16px system-ui,Segoe UI,sans-serif;padding:28px}
-main{max-width:980px;margin:auto}.brand{display:flex;gap:16px;align-items:center;margin:30px 0}.logo{display:grid;place-items:center;width:62px;height:62px;border-radius:19px;background:linear-gradient(140deg,#a18aff,#6342dc);font-size:30px;font-weight:900}
-h1{font-size:clamp(2.8rem,8vw,5rem);letter-spacing:-.06em;line-height:1;margin:0}.muted{color:var(--muted)}.panel{background:#171b2aeF;border:1px solid var(--line);border-radius:24px;padding:26px;margin:18px 0}.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}.tile{background:#20253a;border:1px solid var(--line);border-radius:18px;padding:18px}.tile h2{margin:0 0 8px;font-size:1.1rem}.button{display:inline-block;background:var(--accent);color:white;text-decoration:none;padding:12px 16px;border-radius:12px;font-weight:750;margin:10px 8px 0 0}.secondary{background:#30364b}.tag{display:inline-block;border:1px solid var(--line);border-radius:99px;padding:7px 11px;margin:4px;color:#d7d9e9;font-size:.85rem}.notice{border-left:4px solid var(--warn);padding:12px 16px;background:#282319;border-radius:8px;color:#f4e4c5}.good{border-left:4px solid var(--good);padding:12px 16px;background:#172820;border-radius:8px;color:#d7f4e4}a{color:#c6baff}footer{padding:10px 2px 30px}
+:root{color-scheme:light;--bg:#f2efe8;--panel:#fff;--line:#080808;--text:#0c0c0c;--muted:#454545;--accent:#ff8c00;--warn:#b56b00;--good:#176b3a}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:16px system-ui,Segoe UI,sans-serif;padding:28px}
+main{max-width:980px;margin:auto}.brand{display:flex;gap:16px;align-items:center;margin:30px 0}.logo{display:grid;place-items:center;width:62px;height:62px;border:3px solid #000;border-radius:14px;background:var(--accent);color:#000;font-size:30px;font-weight:900}
+h1{font-size:clamp(2.8rem,8vw,5rem);letter-spacing:-.06em;line-height:1;margin:0}.muted{color:var(--muted)}.panel{background:var(--panel);border:3px solid #000;border-radius:18px;padding:26px;margin:18px 0;box-shadow:5px 5px 0 #000}.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}.tile{background:#fff;border:2px solid #000;border-radius:12px;padding:18px}.tile h2{margin:0 0 8px;font-size:1.1rem}.button{display:inline-block;background:var(--accent);border:2px solid #000;color:#000;text-decoration:none;padding:12px 16px;border-radius:10px;font-weight:800;margin:10px 8px 0 0}.secondary{background:#fff;color:#000}.tag{display:inline-block;border:2px solid #000;border-radius:8px;padding:7px 11px;margin:4px;color:#000;font-size:.85rem}.notice{border:2px solid #000;border-left:7px solid var(--warn);padding:12px 16px;background:#fff4df;border-radius:8px;color:#3d2600}.good{border:2px solid #000;border-left:7px solid var(--good);padding:12px 16px;background:#e8f5eb;border-radius:8px;color:#123b20}a{color:#713b00}footer{padding:10px 2px 30px}
 @media(max-width:680px){body{padding:16px}.grid{grid-template-columns:1fr}.brand{margin-top:12px}}
 </style></head><body><main>
-<div class="brand"><div class="logo">V</div><div><h1>VRFlex</h1><div class="muted">Standalone Quest VR developer environment · Rootless by design</div></div></div>
-<section class="panel"><h2>A standalone VR app with a controller-attached menu.</h2>
-<p class="muted">VRFlex is being rebuilt as an immersive OpenXR app for Quest. The intended interface is a 3D menu attached to the left controller, shown while the Y button is held. It does not require a phone companion.</p>
-<div><span class="tag">Meta Quest 3</span><span class="tag">OpenXR</span><span class="tag">Left-controller menu</span><span class="tag">Per-game profiles</span><span class="tag">No root</span></div>
+<div class="brand"><div class="logo">V</div><div><h1>VRFlex</h1><div class="muted">Quest game launcher · Per-game profiles · Rootless by design</div></div></div>
+<section class="panel"><h2>One launcher. Separate controls for each game.</h2>
+<p class="muted">VRFlex is a Quest launcher and profile manager. The intended controller layout is simple: left Y opens the Mod Menu, while the left Menu (☰) opens the Games switcher. The Games screen lets you select an installed app, save its profile, and launch it.</p>
+<div><span class="tag">Meta Quest</span><span class="tag">Games switcher: ☰</span><span class="tag">Mod Menu: Y</span><span class="tag">Per-game profiles</span><span class="tag">No root</span></div>
 </section>
-<section class="panel"><h2>VR menu modules</h2><div class="grid">
-<article class="tile"><h2>Controller menu</h2><p class="muted">Planned OpenXR panel anchored to the left controller and shown while Y is held. The native VR input and rendering layer is being built.</p></article>
-<article class="tile"><h2>Profiles</h2><p class="muted">Keep independent local settings profiles for supported games. Saved values only affect gameplay when a compatible integration consumes them.</p></article>
-<article class="tile"><h2>Movement & controller tools</h2><p class="muted">VRFlex can control its own OpenXR session. Changes to another game require a compatible game-side integration.</p></article>
+<section class="panel"><h2>VRFlex menus</h2><div class="grid">
+<article class="tile"><h2>Mod Menu · Left Y</h2><p class="muted">The intended shortcut for the active game's profile settings, including movement, comfort, and arm preferences.</p></article>
+<article class="tile"><h2>Games · Left Menu (☰)</h2><p class="muted">Browse installed apps, choose another game, and launch it from the switcher. VRFlex saves the selected game profile before launching.</p></article>
+<article class="tile"><h2>Automatic profile selection</h2><p class="muted">Launching an app through VRFlex makes that app the active profile. The same profile values are shown in the Games and Mod Menu screens.</p></article>
 <article class="tile"><h2>Rootless by design</h2><p class="muted">No root, bootloader unlocking, firmware flashing, protected partition writes, system APK replacement, or hidden shell commands.</p></article>
 </div></section>
 <section class="panel"><h2>Downloads</h2><p class="muted">Install the latest published builds. APK links update when their GitHub Actions workflows finish successfully.</p>
@@ -28,8 +28,8 @@ h1{font-size:clamp(2.8rem,8vw,5rem);letter-spacing:-.06em;line-height:1;margin:0
 <p class="muted">Build status: <a href="https://github.com/notelliotvr69-lang/Autotouch/actions/workflows/vrflex-apk.yml">Current prototype APK workflow</a> · <a href="https://github.com/notelliotvr69-lang/Autotouch/tree/main/VRFlex/OpenXR">OpenXR rebuild notes</a></p>
 </section>
 <section class="panel"><h2>Honest capability status</h2>
-<p class="good">Project direction: standalone immersive OpenXR app with a left-controller menu, opened while Y is held, and locally stored profiles.</p>
-<p class="notice">Current status: the published APK is still the earlier 2D prototype. The native OpenXR app, controller-attached menu, and hold-Y behavior are not implemented or hardware-tested yet. OpenXR input and tracking operate within VRFlex itself; live changes to other games require compatible integrations.</p>
+<p class="good">Implemented in the current source: black framing, orange controls, Games and Mod Menu screens, installed-app launch actions, and locally saved per-app profiles. Launching through VRFlex selects the app's profile first.</p>
+<p class="notice">Shortcut and overlay status: left Y → Mod Menu and left Menu (☰) → Games are the intended controls. The APK does not yet have a verified Quest-wide controller listener or a universally floating in-game overlay. Quest OS or compatible game integrations must expose those inputs. Profile settings are stored, but only affect gameplay when a compatible integration applies them. Hardware behavior has not yet been verified.</p>
 </section>
 <footer class="muted">VRFlex is an independent project within the AutoTouch repository. Not affiliated with or endorsed by Meta.</footer>
 </main></body></html>
