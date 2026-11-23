@@ -35,22 +35,22 @@ public class MainActivity extends Activity {
     private String selectedGameName = "Gorilla Tag";
     private ServerSocket companionServer;
     private static final int COMPANION_PORT=47821;
-    // VRFlex theme: light surfaces, black framing/text, orange controls.
-    private final int bg = Color.rgb(242,239,232), panel = Color.rgb(255,255,255),
-        accent = Color.rgb(255,140,0), text = Color.rgb(12,12,12),
-        muted = Color.rgb(70,70,70);
+    // VRFlex theme: near-black surfaces, orange controls, light text.
+    private final int bg = Color.rgb(8,8,8), panel = Color.rgb(23,23,23),
+        accent = Color.rgb(255,140,0), text = Color.rgb(245,245,245),
+        muted = Color.rgb(180,180,180);
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
         prefs = getSharedPreferences("vrflex", MODE_PRIVATE);
         selectedGame=prefs.getString("selected_game","gorilla");
         selectedGameName=prefs.getString("selected_game_name","Gorilla Tag");
-        getWindow().setStatusBarColor(bg); getWindow().setNavigationBarColor(bg);
+        getWindow().setStatusBarColor(Color.BLACK); getWindow().setNavigationBarColor(Color.BLACK);
         buildShell(); startCompanionServer(); showTab(0);
     }
     private GradientDrawable shape(int c,int r) {
         GradientDrawable d=new GradientDrawable(); d.setColor(c); d.setCornerRadius(r);
-        d.setStroke(3, Color.BLACK); return d;
+        d.setStroke(2, Color.rgb(55,55,55)); return d;
     }
     private TextView label(String s,int z,boolean bold) {
         TextView t=new TextView(this); t.setText(s); t.setTextColor(text); t.setTextSize(z);
@@ -58,7 +58,7 @@ public class MainActivity extends Activity {
     }
     private void buildShell() {
         LinearLayout root=new LinearLayout(this); root.setOrientation(1); root.setPadding(20,18,20,18);
-        GradientDrawable frame=shape(bg,10); frame.setStroke(5,Color.BLACK); root.setBackground(frame);
+        GradientDrawable frame=shape(bg,10); frame.setStroke(4,Color.rgb(255,140,0)); root.setBackground(frame);
         LinearLayout header=new LinearLayout(this); header.setGravity(Gravity.CENTER_VERTICAL);
         header.addView(label("VRFLEX",25,true),new LinearLayout.LayoutParams(0,-2,1));
         TextView ver=label("QUEST 3 • v0.2",12,true); ver.setTextColor(muted); header.addView(ver); root.addView(header);
@@ -81,13 +81,13 @@ public class MainActivity extends Activity {
     }
     private String key(String k){return selectedGame+"_"+k;}
     private void toggle(String title,String desc,String k,boolean init) {
-        card(title,desc); Switch s=new Switch(this); s.setText("Enabled"); s.setTextColor(text);
+        card(title,desc); Switch s=new Switch(this); s.setText("Enabled"); s.setTextColor(text); s.setThumbTintList(android.content.res.ColorStateList.valueOf(accent)); s.setTrackTintList(android.content.res.ColorStateList.valueOf(Color.rgb(95,55,12)));
         s.setChecked(prefs.getBoolean(key(k),init)); s.setOnCheckedChangeListener((b,v)->prefs.edit().putBoolean(key(k),v).apply()); content.addView(s); space();
     }
     private void slider(String title,String k,int min,int max,int init,String unit) {
         card(title,"Saved in the "+gameName()+" profile. Requires a compatible game integration to take effect.");
         int val=prefs.getInt(key(k),init); TextView now=label(val+unit,15,true); content.addView(now);
-        SeekBar seek=new SeekBar(this); seek.setMax(max-min); seek.setProgress(val-min); content.addView(seek);
+        SeekBar seek=new SeekBar(this); seek.setProgressTintList(android.content.res.ColorStateList.valueOf(accent)); seek.setThumbTintList(android.content.res.ColorStateList.valueOf(accent)); seek.setMax(max-min); seek.setProgress(val-min); content.addView(seek);
         seek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
             public void onProgressChanged(SeekBar b,int p,boolean u){int v=p+min;now.setText(v+unit);if(u)prefs.edit().putInt(key(k),v).apply();}
             public void onStartTrackingTouch(SeekBar b){} public void onStopTrackingTouch(SeekBar b){}
@@ -168,7 +168,7 @@ public class MainActivity extends Activity {
             card("Selected game: "+gameName(),"Profile key: "+selectedGame);
             addProfileControls();
             card("BUTTON LAYOUT","Left Y → Mod Menu. Left Menu (☰) → Games / game switcher. Quest-wide button delivery needs OS-supported input access or a game integration.");
-            Button back=new Button(this);back.setText("Back to game library");back.setOnClickListener(v->showTab(0));content.addView(back);
+            Button back=new Button(this);back.setText("Back to game library");back.setTextColor(text);back.setBackground(shape(Color.rgb(35,35,35),12));back.setOnClickListener(v->showTab(0));content.addView(back);
         } else if(tab==2){
             card("Arm settings",gameName()+" profile");
             slider("Left arm length","left_arm",-50,50,0,"%");
@@ -178,7 +178,7 @@ public class MainActivity extends Activity {
             card("General","VRFlex preferences are stored locally on this headset.");
             card("Phone companion","Connect your Android phone and Quest to the same Wi-Fi network. Enter this headset IP in VRFlex Mobile. Keep VRFlex open while connecting.");
             card("Quest IP address",""+localIp()+":"+COMPANION_PORT);
-            Button reset=new Button(this);reset.setText("Reset all profiles");reset.setAllCaps(false);
+            Button reset=new Button(this);reset.setText("Reset all profiles");reset.setAllCaps(false);reset.setTextColor(text);reset.setBackground(shape(Color.rgb(35,35,35),12));
             reset.setOnClickListener(v->{prefs.edit().clear().apply();showTab(3);});content.addView(reset);
             card("Compatibility note","A companion APK cannot automatically alter another game's tracking. Live controls require a supported integration for each game.");
         }
