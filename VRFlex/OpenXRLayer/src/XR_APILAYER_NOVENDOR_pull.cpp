@@ -185,14 +185,17 @@ xrNegotiateLoaderApiLayerInterface(
 
     if (loaderInfo->minInterfaceVersion > XR_CURRENT_LOADER_API_LAYER_VERSION ||
         loaderInfo->maxInterfaceVersion < XR_CURRENT_LOADER_API_LAYER_VERSION ||
-        loaderInfo->minApiVersion > XR_CURRENT_API_VERSION ||
-        loaderInfo->maxApiVersion < XR_CURRENT_API_VERSION) {
+        loaderInfo->minApiVersion > XR_CURRENT_API_VERSION) {
         return XR_ERROR_INITIALIZATION_FAILED;
     }
 
     apiLayerRequest->layerInterfaceVersion =
         XR_CURRENT_LOADER_API_LAYER_VERSION;
-    apiLayerRequest->layerApiVersion = XR_CURRENT_API_VERSION;
+    // Negotiate the newest API version supported by both this layer and loader.
+    apiLayerRequest->layerApiVersion =
+        std::min(loaderInfo->maxApiVersion, XR_CURRENT_API_VERSION);
+    if (apiLayerRequest->layerApiVersion < loaderInfo->minApiVersion)
+        return XR_ERROR_INITIALIZATION_FAILED;
     apiLayerRequest->getInstanceProcAddr = Layer_xrGetInstanceProcAddr;
     apiLayerRequest->createApiLayerInstance =
         Layer_xrCreateApiLayerInstance;
