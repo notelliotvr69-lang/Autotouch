@@ -86,17 +86,17 @@ pattern = re.compile(r'    void SetupMenuPanels\(\) \{.*?\n    \}\n\n    void Cr
 new_methods = '''    void SetupMenuPanels() {
         menuTitle_ = ui_.AddLabel("VRFLEX", {0.0_m, 0.0_m, -0.15_m}, {620.0f, 70.0f});
         menuBody_ = ui_.AddLabel(
-            "ROOTLESS QUEST DEVELOPER MENU\ - Choose a section with the right controller trigger.",
+            "ROOTLESS QUEST DEVELOPER MENU - Choose a section with the right controller trigger.",
             {0.0_m, 0.0_m, -0.15_m},
             {620.0f, 160.0f});
         menuMovement_ = ui_.AddButton("MOVEMENT", {0.0_m, 0.0_m, -0.15_m}, {620.0f, 58.0f},
-            [this]() { menuBody_->SetText("MOVEMENT\ - Seated comfort and app-supported movement settings."); });
+            [this]() { menuBody_->SetText("MOVEMENT - Seated comfort and app-supported movement settings."); });
         menuControllers_ = ui_.AddButton("CONTROLLERS", {0.0_m, 0.0_m, -0.15_m}, {620.0f, 58.0f},
-            [this]() { menuBody_->SetText("CONTROLLERS\ - Controller pose tools for VRFlex own OpenXR session."); });
+            [this]() { menuBody_->SetText("CONTROLLERS - Controller pose tools for VRFlex own OpenXR session."); });
         menuProfiles_ = ui_.AddButton("GAME PROFILES", {0.0_m, 0.0_m, -0.15_m}, {620.0f, 58.0f},
-            [this]() { menuBody_->SetText("GAME PROFILES\ - Local per-game profiles. Live changes need a compatible game integration."); });
+            [this]() { menuBody_->SetText("GAME PROFILES - Local per-game profiles. Live changes need a compatible game integration."); });
         menuSettings_ = ui_.AddButton("SETTINGS", {0.0_m, 0.0_m, -0.15_m}, {620.0f, 58.0f},
-            [this]() { menuBody_->SetText("SETTINGS\ - VRFlex runs without root, phone pairing, or system-file changes."); });
+            [this]() { menuBody_->SetText("SETTINGS - VRFlex runs without root, phone pairing, or system-file changes."); });
 
         menuTitle_->SetVisible(false);
         menuBody_->SetVisible(false);
