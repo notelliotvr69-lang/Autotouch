@@ -82,21 +82,21 @@ replace_once(
 "remove sample panels")
 
 # Replace the sample's large world-fixed menu with a small controller-attached VRFlex panel.
-pattern = re.compile(r'    void SetupMenuPanels\\(\\) \\{.*?\\n    \\}\\n\\n    void CreateSampleDescriptionPanel\\(\\) \\{.*?\\n    \\}', re.S)
+pattern = re.compile(r'    void SetupMenuPanels\(\) \{.*?\n    \}\n\n    void CreateSampleDescriptionPanel\(\) \{.*?\n    \}', re.S)
 new_methods = '''    void SetupMenuPanels() {
         menuTitle_ = ui_.AddLabel("VRFLEX", {0.0_m, 0.0_m, -0.15_m}, {620.0f, 70.0f});
         menuBody_ = ui_.AddLabel(
-            "ROOTLESS QUEST DEVELOPER MENU\\\\nChoose a section with the right controller trigger.",
+            "ROOTLESS QUEST DEVELOPER MENU\\nChoose a section with the right controller trigger.",
             {0.0_m, 0.0_m, -0.15_m},
             {620.0f, 160.0f});
         menuMovement_ = ui_.AddButton("MOVEMENT", {0.0_m, 0.0_m, -0.15_m}, {620.0f, 58.0f},
-            [this]() { menuBody_->SetText("MOVEMENT\\\\nSeated comfort and app-supported movement settings."); });
+            [this]() { menuBody_->SetText("MOVEMENT\\nSeated comfort and app-supported movement settings."); });
         menuControllers_ = ui_.AddButton("CONTROLLERS", {0.0_m, 0.0_m, -0.15_m}, {620.0f, 58.0f},
-            [this]() { menuBody_->SetText("CONTROLLERS\\\\nController pose tools for VRFlex's own OpenXR session."); });
+            [this]() { menuBody_->SetText("CONTROLLERS\\nController pose tools for VRFlex's own OpenXR session."); });
         menuProfiles_ = ui_.AddButton("GAME PROFILES", {0.0_m, 0.0_m, -0.15_m}, {620.0f, 58.0f},
-            [this]() { menuBody_->SetText("GAME PROFILES\\\\nLocal per-game profiles. Live changes need a compatible game integration."); });
+            [this]() { menuBody_->SetText("GAME PROFILES\\nLocal per-game profiles. Live changes need a compatible game integration."); });
         menuSettings_ = ui_.AddButton("SETTINGS", {0.0_m, 0.0_m, -0.15_m}, {620.0f, 58.0f},
-            [this]() { menuBody_->SetText("SETTINGS\\\\nVRFlex runs without root, phone pairing, or system-file changes."); });
+            [this]() { menuBody_->SetText("SETTINGS\\nVRFlex runs without root, phone pairing, or system-file changes."); });
 
         menuTitle_->SetVisible(false);
         menuBody_->SetVisible(false);
@@ -150,7 +150,7 @@ insert = '''    void UpdateVrFlexMenu() {
 replace_once(anchor, insert, "menu pose helper")
 
 # Replace sample-specific labels with a simple UI update; menu items are built above.
-pattern = re.compile(r'    void UpdateUI\\(const OVRFW::ovrApplFrameIn& in\\) \\{.*?\\n    \\}\\n\\n    // Called by the XrApp framework', re.S)
+pattern = re.compile(r'    void UpdateUI\(const OVRFW::ovrApplFrameIn& in\) \{.*?\n    \}\n\n    // Called by the XrApp framework', re.S)
 new_update = '''    void UpdateUI(const OVRFW::ovrApplFrameIn& in) {
         ui_.Update(in);
     }
