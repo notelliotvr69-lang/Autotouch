@@ -6,6 +6,9 @@ on:
  pull_request:
   paths: ['VRFlexMobile/**', '.github/workflows/vrflex-mobile-apk.yml']
  workflow_dispatch:
+concurrency:
+ group: vrflex-mobile-build
+ cancel-in-progress: true
 permissions:
  contents: write
 jobs:
