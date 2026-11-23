@@ -173,6 +173,7 @@ public class MainActivity extends Activity {
                         PrintWriter out=new PrintWriter(client.getOutputStream(),true)) {
                         String command=in.readLine();
                         if("PING".equals(command)) out.println("VRFLEX_READY");
+                        else if("STATUS".equals(command)) out.println("READY|"+selectedGame+"|"+gameName());
                         else out.println("UNSUPPORTED");
                     } catch(Exception ignored) {}
                 }
