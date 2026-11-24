@@ -204,5 +204,22 @@ replace_once(
 
 s = s.replace("XrInput Sample", "VRFlex")
 s = s.replace("XrInput sample", "VRFlex")
+
+# Fail early if the generated sample is missing any core VRFlex menu wiring.
+required_fragments = [
+    'actionMenuToggle_',
+    '"/user/hand/left/input/y/click"',
+    'void UpdateVrFlexMenu()',
+    'menuTitle_->SetVisible(show)',
+    'menuSettings_->SetVisible(show)',
+    'ui_.Update(in);',
+]
+missing = [fragment for fragment in required_fragments if fragment not in s]
+if missing:
+    raise SystemExit("Patched OpenXR source is missing required VRFlex wiring: " + ", ".join(missing))
+
+if "cubeRenderer_.Render(out.Surfaces);" in s or "toolRenderer_.Render(out.Surfaces);" in s:
+    raise SystemExit("Sample demo renderer was not fully removed from VRFlex prototype")
+
 source.write_text(s, encoding="utf-8")
 print(f"Patched {source}")
