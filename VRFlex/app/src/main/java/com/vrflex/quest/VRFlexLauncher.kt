@@ -75,7 +75,7 @@ fun VRFlexLauncher() {
                 else -> {
                     Text("SHARED ARM LENGTH", color = FlexText)
                     Text("${armLength.toInt()}%", color = FlexOrange, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-                    Slider(value = armLength, onValueChange = { armLength = it }, valueRange = 0f..200f)
+                    Slider(value = armLength, onValueChange = { armLength = it; settings.edit().putFloat("arm_length", it).apply() }, valueRange = 0f..200f)
                     Text("One shared value for both controllers. Saved on this device.", color = FlexMuted, fontSize = 11.sp)
                 }
             }
