@@ -1,6 +1,10 @@
 package com.vrflex.mobile;
 
 import android.app.Activity;
+import android.content.Intent;
+import android.media.projection.MediaProjectionManager;
+import android.Manifest;
+import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.graphics.Typeface;
 import android.graphics.Color;
@@ -18,6 +22,8 @@ public class MainActivity extends Activity {
     private Button pairButton, connectButton, diagnosticButton, disconnectButton;
     private final int bg=Color.rgb(8,8,8), panel=Color.rgb(23,23,23), orange=Color.rgb(255,140,0), white=Color.rgb(245,245,245), muted=Color.rgb(180,180,180);
     private AdbSession adb;
+    private static final int REQUEST_CAPTURE = 4765;
+    private static final int REQUEST_AUDIO = 4766;
 
     @Override public void onCreate(Bundle b) {
         super.onCreate(b);
@@ -37,6 +43,9 @@ public class MainActivity extends Activity {
         pairPort = field("Pairing port (shown on Pair device screen)", null); root.addView(pairPort);
         pairingCode = field("6-digit pairing code", null); pairingCode.setInputType(2); root.addView(pairingCode);
         pairButton = button("PAIR WITH QUEST"); addButton(root,pairButton); pairButton.setOnClickListener(v -> pairQuest());
+
+        Button hostButton=button("START PHONE HOST + SCREEN STREAM"); addButton(root,hostButton); hostButton.setOnClickListener(v -> requestHostStart());
+        Button stopHostButton=button("STOP PHONE HOST"); addButton(root,stopHostButton); stopHostButton.setOnClickListener(v -> { stopService(new Intent(this, HostService.class)); status.setText("Phone host stopped"); });
 
         TextView divider = new TextView(this); divider.setText("AFTER PAIRING"); divider.setTextColor(orange); divider.setTypeface(null,Typeface.BOLD); divider.setPadding(0,22,0,8); root.addView(divider);
         TextView connectHelp = new TextView(this); connectHelp.setText("Return to the main Wireless Debugging screen and enter its separate connection port below."); connectHelp.setTextColor(muted); connectHelp.setTextSize(13); root.addView(connectHelp);
@@ -122,6 +131,34 @@ public class MainActivity extends Activity {
     }
 
     private GradientDrawable round(int color,int stroke) { GradientDrawable d=new GradientDrawable(); d.setColor(color); d.setCornerRadius(14); d.setStroke(2,stroke); return d; }
+
+    private void requestHostStart() {
+        if (android.os.Build.VERSION.SDK_INT >= 23 && checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, REQUEST_AUDIO);
+            return;
+        }
+        MediaProjectionManager manager=(MediaProjectionManager)getSystemService(MEDIA_PROJECTION_SERVICE);
+        startActivityForResult(manager.createScreenCaptureIntent(), REQUEST_CAPTURE);
+    }
+
+    @Override protected void onActivityResult(int requestCode,int resultCode,Intent data) {
+        super.onActivityResult(requestCode,resultCode,data);
+        if(requestCode==REQUEST_CAPTURE) {
+            if(resultCode==RESULT_OK && data!=null) {
+                Intent service=new Intent(this,HostService.class);
+                service.putExtra(HostService.EXTRA_RESULT_CODE,resultCode);
+                service.putExtra(HostService.EXTRA_RESULT_DATA,data);
+                if(android.os.Build.VERSION.SDK_INT>=26) startForegroundService(service); else startService(service);
+                status.setText("Starting phone host and screen/audio capture…");
+            } else status.setText("Screen capture permission denied.");
+        }
+    }
+
+    @Override public void onRequestPermissionsResult(int requestCode,String[] permissions,int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode,permissions,grantResults);
+        if(requestCode==REQUEST_AUDIO && grantResults.length>0 && grantResults[0]==PackageManager.PERMISSION_GRANTED) requestHostStart();
+        else if(requestCode==REQUEST_AUDIO) status.setText("Microphone permission is needed for playback audio capture.");
+    }
 
     private void pairQuest() {
         String address=host.getText().toString().trim();
