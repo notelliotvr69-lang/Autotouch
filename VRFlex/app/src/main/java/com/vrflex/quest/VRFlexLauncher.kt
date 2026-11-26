@@ -33,6 +33,7 @@ fun VRFlexLauncher() {
     var tab by remember { mutableStateOf("GAMES") }
     var prediction by remember { mutableFloatStateOf(33f) }
     var armLength by remember { mutableFloatStateOf(100f) }
+    var launchStatus by remember { mutableStateOf("Ready") }
     MaterialTheme {
         Column(
             modifier = Modifier.fillMaxSize().background(FlexBlack, RoundedCornerShape(22.dp)).padding(22.dp),
@@ -57,9 +58,10 @@ fun VRFlexLauncher() {
             when (tab) {
                 "GAMES" -> {
                     Text("YOUR LIBRARY", color = FlexMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    GameLaunchButton("GORILLA TAG", "com.AnotherAxiom.GorillaTag")
-                    GameLaunchButton("GILLA", "com.Chase.Gilla")
+                    GameLaunchButton("GORILLA TAG", "com.AnotherAxiom.GorillaTag") { launchStatus = it }
+                    GameLaunchButton("GILLA", "com.Chase.Gilla") { launchStatus = it }
                     Text("Choose a game to open it. More installed apps can be added in a later pass.", color = FlexMuted, fontSize = 11.sp)
+                    Text(launchStatus, color = if (launchStatus.startsWith("Could not") || launchStatus.startsWith("Not installed")) FlexOrange else FlexMuted, fontSize = 11.sp)
                 }
                 "MOD MENU" -> {
                     Text("CONTROLLER", color = FlexOrange, fontWeight = FontWeight.Bold)
@@ -82,12 +84,21 @@ fun VRFlexLauncher() {
 }
 
 @Composable
-private fun GameLaunchButton(label: String, packageName: String) {
+private fun GameLaunchButton(label: String, packageName: String, onStatus: (String) -> Unit) {
     val context = LocalContext.current
     Button(
         onClick = {
-            val launch = context.packageManager.getLaunchIntentForPackage(packageName)
-            if (launch != null) context.startActivity(launch)
+            try {
+                val launch = context.packageManager.getLaunchIntentForPackage(packageName)
+                if (launch != null) {
+                    context.startActivity(launch)
+                    onStatus("Opening $label…")
+                } else {
+                    onStatus("Not installed or launch activity unavailable: $label")
+                }
+            } catch (error: Exception) {
+                onStatus("Could not open $label: ${error.javaClass.simpleName}")
+            }
         },
         modifier = Modifier.fillMaxWidth(),
         colors = ButtonDefaults.buttonColors(containerColor = FlexPanel, contentColor = FlexText),
