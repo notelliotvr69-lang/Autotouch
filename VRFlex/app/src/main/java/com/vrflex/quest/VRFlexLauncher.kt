@@ -98,11 +98,10 @@ fun VRFlexLauncher(tabState: MutableState<String>) {
     var connectionStatus by remember { mutableStateOf("Not connected • enter your phone's Wi-Fi IP") }
     var connected by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
-    val settings = remember {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val settings = remember(context) {
         // Quest-side preferences are intentionally local; they do not alter other games' tracking.
-        androidx.compose.ui.platform.LocalContext.current.getSharedPreferences(
-            "vrflex_settings", android.content.Context.MODE_PRIVATE
-        )
+        context.getSharedPreferences("vrflex_settings", android.content.Context.MODE_PRIVATE)
     }
     var prediction by remember { mutableFloatStateOf(settings.getFloat("prediction", 33f)) }
     var armLength by remember { mutableFloatStateOf(settings.getFloat("arm_length", 100f)) }
@@ -116,7 +115,8 @@ fun VRFlexLauncher(tabState: MutableState<String>) {
             val result = try { action() } catch (error: Exception) {
                 "Connection failed: ${error.message ?: error.javaClass.simpleName}"
             }
-            connected = result.startsWith("Connected")
+            if (result.startsWith("Connection failed")) connected = false
+            else if (result.startsWith("Connected")) connected = true
             connectionStatus = result
             busy = false
         }.start()
