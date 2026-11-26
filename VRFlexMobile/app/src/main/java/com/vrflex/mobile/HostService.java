@@ -32,6 +32,7 @@ public final class HostService extends Service {
     private DatagramSocket videoSocket, audioSocket, poseSocket;
     private volatile InetAddress clientAddress;
     private volatile int latestPosePackets;
+    private volatile byte[] codecConfig;
     private MediaProjection projection;
     private MediaCodec videoEncoder;
     private VirtualDisplay virtualDisplay;
@@ -82,7 +83,7 @@ public final class HostService extends Service {
                 org.json.JSONObject msg=new org.json.JSONObject(line);
                 String type=msg.optString("type");
                 if("hello".equals(type)){
-                    out.write(new org.json.JSONObject().put("type","welcome").put("protocol",1).put("video_port",4768).put("audio_port",4767).put("pose_port",4766).put("video_codec","h264").put("video_width",1280).put("video_height",720).toString());out.newLine();out.flush();
+                    out.write(new org.json.JSONObject().put("type","welcome").put("protocol",1).put("video_port",4768).put("audio_port",4767).put("pose_port",4766).put("video_codec","h264").put("video_width",1280).put("video_height",720).toString());out.newLine();out.flush();\n                    sendCodecConfig();
                 }else if("launch".equals(type)){
                     String game=msg.optString("game");
                     String pkg=msg.optString("package");
@@ -137,7 +138,17 @@ public final class HostService extends Service {
         MediaCodec.BufferInfo info=new MediaCodec.BufferInfo();int frame=0;
         while(running.get())try{
             int index=videoEncoder.dequeueOutputBuffer(info,10_000);
-            if(index>=0){
+            if(index==MediaCodec.INFO_OUTPUT_FORMAT_CHANGED){
+                MediaFormat outputFormat=videoEncoder.getOutputFormat();
+                ByteBuffer sps=outputFormat.getByteBuffer("csd-0");
+                ByteBuffer pps=outputFormat.getByteBuffer("csd-1");
+                if(sps!=null){
+                    byte[] a=new byte[sps.remaining()];sps.get(a);
+                    byte[] b=pps==null?new byte[0]:new byte[pps.remaining()];if(pps!=null)pps.get(b);
+                    codecConfig=new byte[a.length+b.length];System.arraycopy(a,0,codecConfig,0,a.length);System.arraycopy(b,0,codecConfig,a.length,b.length);
+                    sendCodecConfig();
+                }
+            }else if(index>=0){
                 ByteBuffer data=videoEncoder.getOutputBuffer(index);
                 if(data!=null&&info.size>0){
                     byte[] bytes=new byte[info.size];data.position(info.offset);data.limit(info.offset+info.size);data.get(bytes);
@@ -166,6 +177,10 @@ public final class HostService extends Service {
                 }catch(Exception e){if(running.get())updateNotification("Audio capture: "+safe(e));}
             },"VRFlex-Audio");audioThread.start();
         }catch(Exception e){updateNotification("Audio capture unavailable: "+safe(e));}
+    }
+    private void sendCodecConfig(){
+        byte[] config=codecConfig;
+        if(config!=null&&config.length>0)try{sendFragments(videoSocket,config,clientAddress,4768,-1);}catch(Exception ignored){}
     }
     private void sendFragments(DatagramSocket socket,byte[] bytes,InetAddress address,int port,int sequence)throws Exception{
         if(address==null)return;
