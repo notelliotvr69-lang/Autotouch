@@ -31,6 +31,7 @@ public final class HostService extends Service {
     private ServerSocket controlServer;
     private DatagramSocket videoSocket, audioSocket, poseSocket;
     private volatile InetAddress clientAddress;
+    private volatile Socket activeClient;
     private volatile int latestPosePackets;
     private volatile byte[] codecConfig;
     private MediaProjection projection;
@@ -71,8 +72,14 @@ public final class HostService extends Service {
     }
     private void acceptClients(){
         while(running.get())try{
-            Socket socket=controlServer.accept();socket.setSoTimeout(0);
+            Socket socket=controlServer.accept();
+            socket.setSoTimeout(0);
+            socket.setKeepAlive(true);
+            socket.setTcpNoDelay(true);
+            Socket previous=activeClient;
+            activeClient=socket;
             clientAddress=socket.getInetAddress();
+            if(previous!=null && previous!=socket)try{previous.close();}catch(Exception ignored){}
             new Thread(()->handleClient(socket),"VRFlex-Client").start();
         }catch(Exception e){if(running.get())updateNotification("Control server: "+safe(e));}
     }
@@ -96,7 +103,12 @@ public final class HostService extends Service {
                     out.write("{\"type\":\"pong\"}");out.newLine();out.flush();
                 }
             }
-        }catch(Exception ignored){}
+        }catch(Exception ignored){}finally{
+            if(activeClient==socket){
+                activeClient=null;
+                clientAddress=null;
+            }
+        }
     }
     private String packageFor(String game){
         if("Gorilla Tag".equalsIgnoreCase(game))return "com.AnotherAxiom.GorillaTag";
@@ -158,12 +170,16 @@ public final class HostService extends Service {
                     sendCodecConfig();
                 }
             }else if(index>=0){
-                ByteBuffer data=videoEncoder.getOutputBuffer(index);
-                if(data!=null&&info.size>0){
-                    byte[] bytes=new byte[info.size];data.position(info.offset);data.limit(info.offset+info.size);data.get(bytes);
-                    if((info.flags&MediaCodec.BUFFER_FLAG_CODEC_CONFIG)!=0)sendFragments(videoSocket,bytes,clientAddress,4768,-1);else sendFragments(videoSocket,bytes,clientAddress,4768,frame++);
+                try{
+                    ByteBuffer data=videoEncoder.getOutputBuffer(index);
+                    if(data!=null&&info.size>0){
+                        byte[] bytes=new byte[info.size];data.position(info.offset);data.limit(info.offset+info.size);data.get(bytes);
+                        if((info.flags&MediaCodec.BUFFER_FLAG_CODEC_CONFIG)!=0)sendFragments(videoSocket,bytes,clientAddress,4768,-1);else sendFragments(videoSocket,bytes,clientAddress,4768,frame++);
+                    }
+                }finally{
+                    // Always return the encoder buffer, even if a UDP send fails.
+                    videoEncoder.releaseOutputBuffer(index,false);
                 }
-                videoEncoder.releaseOutputBuffer(index,false);
             }
         }catch(Exception e){if(running.get())updateNotification("Video encoder: "+safe(e));}
     }
@@ -214,6 +230,8 @@ public final class HostService extends Service {
     @Override public void onDestroy(){
         running.set(false);
         try{if(controlServer!=null)controlServer.close();}catch(Exception ignored){}
+        try{if(activeClient!=null)activeClient.close();}catch(Exception ignored){}
+        activeClient=null;clientAddress=null;
         try{if(videoSocket!=null)videoSocket.close();if(audioSocket!=null)audioSocket.close();if(poseSocket!=null)poseSocket.close();}catch(Exception ignored){}
         try{if(virtualDisplay!=null)virtualDisplay.release();}catch(Exception ignored){}
         try{if(videoEncoder!=null){videoEncoder.stop();videoEncoder.release();}}catch(Exception ignored){}
