@@ -14,6 +14,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import android.content.Intent
@@ -31,13 +32,15 @@ private val FlexText = Color(0xFFF4F4F5)
 private val FlexMuted = Color(0xFFAAAAB2)
 
 @Composable
-fun VRFlexLauncher() {
+fun VRFlexLauncher(tabState: MutableState<String>) {
     val context = LocalContext.current
     val settings = remember(context) { context.getSharedPreferences("vrflex_settings", android.content.Context.MODE_PRIVATE) }
-    var tab by remember { mutableStateOf("GAMES") }
+    var tab by tabState
     var prediction by remember { mutableFloatStateOf(settings.getFloat("prediction", 33f)) }
     var armLength by remember { mutableFloatStateOf(settings.getFloat("arm_length", 100f)) }
     var launchStatus by remember { mutableStateOf("Ready") }
+    var profileEnabled by remember { mutableStateOf(settings.getBoolean("profile_enabled", true)) }
+    var sittingMode by remember { mutableStateOf(settings.getBoolean("sitting_mode", false)) }
     var installedApps by remember { mutableStateOf(emptyList<InstalledVrApp>()) }
     fun refreshLibrary() {
         val intents = listOf(
@@ -110,12 +113,23 @@ fun VRFlexLauncher() {
                     Text(launchStatus, color = if (launchStatus.startsWith("Could not")) FlexOrange else FlexMuted, fontSize = 11.sp)
                 }
                 "MOD MENU" -> {
+                    Text("PROFILE", color = FlexOrange, fontWeight = FontWeight.Bold)
+                    Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                        Text("Enable VRFlex profile", color = FlexText)
+                        Switch(checked = profileEnabled, onCheckedChange = { profileEnabled = it; settings.edit().putBoolean("profile_enabled", it).apply() })
+                    }
+                    Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                        Text("Sitting mode preference", color = FlexText)
+                        Switch(checked = sittingMode, onCheckedChange = { sittingMode = it; settings.edit().putBoolean("sitting_mode", it).apply() })
+                    }
                     Text("CONTROLLER", color = FlexOrange, fontWeight = FontWeight.Bold)
                     Text("Prediction  •  ${prediction.toInt()}", color = FlexText)
                     Slider(value = prediction, onValueChange = { prediction = it; settings.edit().putFloat("prediction", it).apply() }, valueRange = 0f..200f)
                     Text("Arm length  •  ${armLength.toInt()}%", color = FlexText)
                     Slider(value = armLength, onValueChange = { armLength = it; settings.edit().putFloat("arm_length", it).apply() }, valueRange = 0f..200f)
-                    Text("These controls currently change VRFlex's preview values only; cross-game tracking changes need a supported runtime integration.", color = FlexMuted, fontSize = 10.sp)
+                    Text("These values are saved on this headset. Changing another game's tracking requires a supported game integration.", color = FlexMuted, fontSize = 10.sp)
+                    Text("POINTER", color = FlexOrange, fontWeight = FontWeight.Bold)
+                    Text("Aim the controller laser or hand ray at a control. Press the trigger or pinch to select it. Spatial SDK supplies pointer interaction for this panel.", color = FlexMuted, fontSize = 10.sp)
                 }
                 else -> {
                     Text("SHARED ARM LENGTH", color = FlexText)
@@ -124,7 +138,7 @@ fun VRFlexLauncher() {
                     Text("One shared value for both controllers. Saved on this device.", color = FlexMuted, fontSize = 11.sp)
                 }
             }
-            Text("VRFLEX • SPATIAL PREVIEW", color = FlexMuted, fontSize = 9.sp)
+            Text("LEFT Y • MOD MENU     LEFT MENU • GAMES", color = FlexOrange, fontSize = 9.sp, fontWeight = FontWeight.Bold)
         }
     }
 }
