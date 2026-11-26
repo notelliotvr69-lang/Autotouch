@@ -83,7 +83,8 @@ public final class HostService extends Service {
                 org.json.JSONObject msg=new org.json.JSONObject(line);
                 String type=msg.optString("type");
                 if("hello".equals(type)){
-                    out.write(new org.json.JSONObject().put("type","welcome").put("protocol",1).put("video_port",4768).put("audio_port",4767).put("pose_port",4766).put("video_codec","h264").put("video_width",1280).put("video_height",720).toString());out.newLine();out.flush();\n                    sendCodecConfig();
+                    out.write(new org.json.JSONObject().put("type","welcome").put("protocol",1).put("video_port",4768).put("audio_port",4767).put("pose_port",4766).put("video_codec","h264").put("video_width",1280).put("video_height",720).toString());out.newLine();out.flush();
+                    sendCodecConfig();
                 }else if("launch".equals(type)){
                     String game=msg.optString("game");
                     String pkg=msg.optString("package");
