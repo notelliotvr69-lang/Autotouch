@@ -116,9 +116,17 @@ public final class HostService extends Service {
         byte[] buf=new byte[2048];
         while(running.get())try{
             DatagramPacket packet=new DatagramPacket(buf,buf.length);poseSocket.receive(packet);
+            InetAddress expected=clientAddress;
+            if(expected!=null && !expected.equals(packet.getAddress()))continue;
+            String payload=new String(packet.getData(),packet.getOffset(),packet.getLength(),java.nio.charset.StandardCharsets.UTF_8);
+            org.json.JSONObject incoming=new org.json.JSONObject(payload);
+            if(!"tracking".equals(incoming.optString("type")))continue;
             latestPosePackets++;
-            // The latest pose packet is accepted as telemetry. Injecting arbitrary controller
-            // poses into third-party Android apps requires OS privileges and is not implied here.
+            // Apply saved VRFlex arm reach/position settings and publish the normalized packet
+            // to the in-app runtime adapter. This does not inject input into unrelated apps.
+            TrackingProcessor.process(this,incoming,latestPosePackets);
+            if(latestPosePackets==1 || latestPosePackets%120==0)
+                updateNotification("Host streaming • tracking packets: "+latestPosePackets);
         }catch(Exception e){if(running.get())updateNotification("Pose channel: "+safe(e));}
     }
     private void startVideo()throws Exception{
