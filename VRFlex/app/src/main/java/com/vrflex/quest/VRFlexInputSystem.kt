@@ -10,19 +10,52 @@ import com.meta.spatial.toolkit.AvatarBody
 import com.meta.spatial.toolkit.Controller
 import com.meta.spatial.toolkit.Followable
 import com.meta.spatial.toolkit.FollowableType
+import com.meta.spatial.toolkit.Transform
+import kotlin.math.abs
 
 /**
- * Left Y toggles the VRFlex mod menu.
- * Left Menu opens the game/app switcher.
- *
- * Avatar discovery can happen after onSceneReady, so the panel anchor is
- * retried here until the local tracked head is available.
+ * Live arm reach adjustment for tracked hands inside VRFlex only.
+ * It cannot alter tracking used by other independently running Quest games.
  */
+object ArmLengthConfig {
+    @Volatile var factor: Float = 1.0f
+}
+
 class VRFlexInputSystem(
     private val onToggleModMenu: () -> Unit,
     private val onOpenGameSwitcher: () -> Unit
 ) : SystemBase() {
+    private data class HandPoseState(
+        var base: Vector3? = null,
+        var lastApplied: Vector3? = null
+    )
+
     private var panelAnchored = false
+    private val leftPose = HandPoseState()
+    private val rightPose = HandPoseState()
+
+    private fun adjustHand(hand: Entity, headPosition: Vector3, state: HandPoseState) {
+        val transform = hand.tryGetComponent<Transform>() ?: return
+        val current = transform.transform.t
+        val last = state.lastApplied
+        val base = state.base
+        val isOurPreviousOutput = last != null &&
+            abs(current.x - last.x) < 0.0001f &&
+            abs(current.y - last.y) < 0.0001f &&
+            abs(current.z - last.z) < 0.0001f
+        val raw = if (isOurPreviousOutput && base != null) base else current
+        state.base = raw
+
+        val scale = ArmLengthConfig.factor.coerceIn(0.5f, 1.5f)
+        val adjusted = Vector3(
+            headPosition.x + (raw.x - headPosition.x) * scale,
+            headPosition.y + (raw.y - headPosition.y) * scale,
+            headPosition.z + (raw.z - headPosition.z) * scale
+        )
+        transform.transform.t = adjusted
+        hand.setComponent(transform)
+        state.lastApplied = Vector3(adjusted.x, adjusted.y, adjusted.z)
+    }
 
     override fun execute() {
         val avatar = Query.where { has(AvatarBody.id) }
@@ -45,6 +78,13 @@ class VRFlexInputSystem(
                 )
                 panelAnchored = true
             }
+        }
+
+        val headTransform = body.head.tryGetComponent<Transform>()
+        if (headTransform != null) {
+            val headPosition = headTransform.transform.t
+            adjustHand(body.leftHand, headPosition, leftPose)
+            adjustHand(body.rightHand, headPosition, rightPose)
         }
 
         val leftController = body.leftHand.tryGetComponent<Controller>() ?: return
