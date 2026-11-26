@@ -30,9 +30,10 @@ private val FlexMuted = Color(0xFFAAAAB2)
 @Composable
 fun VRFlexLauncher() {
     val context = LocalContext.current
+    val settings = remember(context) { context.getSharedPreferences("vrflex_settings", android.content.Context.MODE_PRIVATE) }
     var tab by remember { mutableStateOf("GAMES") }
-    var prediction by remember { mutableFloatStateOf(33f) }
-    var armLength by remember { mutableFloatStateOf(100f) }
+    var prediction by remember { mutableFloatStateOf(settings.getFloat("prediction", 33f)) }
+    var armLength by remember { mutableFloatStateOf(settings.getFloat("arm_length", 100f)) }
     var launchStatus by remember { mutableStateOf("Ready") }
     MaterialTheme {
         Column(
@@ -66,16 +67,16 @@ fun VRFlexLauncher() {
                 "MOD MENU" -> {
                     Text("CONTROLLER", color = FlexOrange, fontWeight = FontWeight.Bold)
                     Text("Prediction  •  ${prediction.toInt()}", color = FlexText)
-                    Slider(value = prediction, onValueChange = { prediction = it }, valueRange = 0f..200f)
+                    Slider(value = prediction, onValueChange = { prediction = it; settings.edit().putFloat("prediction", it).apply() }, valueRange = 0f..200f)
                     Text("Arm length  •  ${armLength.toInt()}%", color = FlexText)
-                    Slider(value = armLength, onValueChange = { armLength = it }, valueRange = 0f..200f)
+                    Slider(value = armLength, onValueChange = { armLength = it; settings.edit().putFloat("arm_length", it).apply() }, valueRange = 0f..200f)
                     Text("These controls currently change VRFlex's preview values only; cross-game tracking changes need a supported runtime integration.", color = FlexMuted, fontSize = 10.sp)
                 }
                 else -> {
                     Text("SHARED ARM LENGTH", color = FlexText)
                     Text("${armLength.toInt()}%", color = FlexOrange, fontSize = 24.sp, fontWeight = FontWeight.Bold)
                     Slider(value = armLength, onValueChange = { armLength = it }, valueRange = 0f..200f)
-                    Text("One shared value for both controllers.", color = FlexMuted, fontSize = 11.sp)
+                    Text("One shared value for both controllers. Saved on this device.", color = FlexMuted, fontSize = 11.sp)
                 }
             }
             Text("VRFLEX • SPATIAL PREVIEW", color = FlexMuted, fontSize = 9.sp)
