@@ -2,6 +2,8 @@ package com.vrflex.mobile;
 
 import android.app.Activity;
 import android.content.Intent;
+import android.content.BroadcastReceiver;
+import android.content.IntentFilter;
 import android.media.projection.MediaProjectionManager;
 import android.Manifest;
 import android.content.pm.PackageManager;
@@ -20,6 +22,9 @@ public class MainActivity extends Activity {
     private EditText host, pairPort, pairingCode, connectPort;
     private TextView status, details;
     private Button pairButton, connectButton, diagnosticButton, disconnectButton;
+    private TextView trackingStatus;
+    private BroadcastReceiver trackingReceiver;
+    private boolean trackingReceiverRegistered = false;
     private final int bg=Color.rgb(8,8,8), panel=Color.rgb(23,23,23), orange=Color.rgb(255,140,0), white=Color.rgb(245,245,245), muted=Color.rgb(180,180,180);
     private AdbSession adb;
     private static final int REQUEST_CAPTURE = 4765;
@@ -37,6 +42,7 @@ public class MainActivity extends Activity {
         TextView title=new TextView(this); title.setText("VRFLEX MOBILE"); title.setTextSize(27); title.setTextColor(orange); title.setTypeface(null,Typeface.BOLD); root.addView(title);
         TextView subtitle=new TextView(this); subtitle.setText("QUEST ADB • WIRELESS DEBUGGING"); subtitle.setTextColor(muted); subtitle.setTextSize(12); subtitle.setPadding(0,5,0,18); root.addView(subtitle);
         addPhoneHostCheck(root);
+        addArmOffsetControls(root);
         TextView help=new TextView(this); help.setText("Connect your phone and Quest to the same Wi-Fi network. On Quest, open Settings → System → Developer → Wireless Debugging."); help.setTextColor(white); help.setTextSize(15); help.setPadding(0,0,0,16); root.addView(help);
 
         host = field("Quest IP address", "quest_ip"); root.addView(host);
@@ -158,6 +164,96 @@ public class MainActivity extends Activity {
         super.onRequestPermissionsResult(requestCode,permissions,grantResults);
         if(requestCode==REQUEST_AUDIO && grantResults.length>0 && grantResults[0]==PackageManager.PERMISSION_GRANTED) requestHostStart();
         else if(requestCode==REQUEST_AUDIO) status.setText("Microphone permission is needed for playback audio capture.");
+    }
+
+
+    private void addArmOffsetControls(LinearLayout root) {
+        TextView heading = new TextView(this);
+        heading.setText("ARM TRACKING OFFSETS");
+        heading.setTextColor(orange);
+        heading.setTypeface(null, Typeface.BOLD);
+        heading.setTextSize(15);
+        heading.setPadding(0, 22, 0, 8);
+        root.addView(heading);
+
+        TextView explanation = new TextView(this);
+        explanation.setText("These VRFlex-only settings adjust the incoming Quest hand positions relative to the head before the phone exposes the adjusted tracking packet to its runtime adapter. They do not change Android-wide or other apps' controller tracking.");
+        explanation.setTextColor(muted);
+        explanation.setTextSize(13);
+        root.addView(explanation);
+
+        android.content.SharedPreferences prefs = getSharedPreferences("vrflex_tracking", MODE_PRIVATE);
+        addTrackingSlider(root, "Arm reach", "arm_scale", 50, 150,
+                Math.round(prefs.getFloat("arm_scale", 1.0f) * 100), "%", 100);
+        addTrackingSlider(root, "World X offset", "arm_offset_x_cm", -100, 100,
+                prefs.getInt("arm_offset_x_cm", 0), " cm", 0);
+        addTrackingSlider(root, "World Y offset", "arm_offset_y_cm", -100, 100,
+                prefs.getInt("arm_offset_y_cm", 0), " cm", 0);
+        addTrackingSlider(root, "World Z offset", "arm_offset_z_cm", -100, 100,
+                prefs.getInt("arm_offset_z_cm", 0), " cm", 0);
+
+        trackingStatus = new TextView(this);
+        trackingStatus.setText("Tracking: waiting for Quest packets");
+        trackingStatus.setTextColor(orange);
+        trackingStatus.setTextSize(13);
+        trackingStatus.setPadding(0, 12, 0, 4);
+        root.addView(trackingStatus);
+    }
+
+    private void addTrackingSlider(LinearLayout root, String label, String key,
+                                   int min, int max, int initial, String suffix, int scaleKey) {
+        TextView value = new TextView(this);
+        value.setText(label + ": " + initial + suffix);
+        value.setTextColor(white);
+        value.setTextSize(14);
+        value.setPadding(0, 12, 0, 0);
+        root.addView(value);
+
+        SeekBar bar = new SeekBar(this);
+        bar.setMax(max - min);
+        bar.setProgress(Math.max(0, Math.min(max - min, initial - min)));
+        bar.setProgressTintList(android.content.res.ColorStateList.valueOf(orange));
+        bar.setThumbTintList(android.content.res.ColorStateList.valueOf(orange));
+        root.addView(bar, new LinearLayout.LayoutParams(-1, 42));
+        value.setText(label + ": " + initial + suffix);
+        bar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                int selected = min + progress;
+                value.setText(label + ": " + selected + suffix);
+                android.content.SharedPreferences.Editor edit = getSharedPreferences("vrflex_tracking", MODE_PRIVATE).edit();
+                if ("arm_scale".equals(key)) edit.putFloat(key, selected / 100.0f);
+                else edit.putInt(key, selected);
+                edit.apply();
+            }
+            @Override public void onStartTrackingTouch(SeekBar seekBar) {}
+            @Override public void onStopTrackingTouch(SeekBar seekBar) {}
+        });
+    }
+
+    @Override protected void onStart() {
+        super.onStart();
+        if (trackingReceiver == null) {
+            trackingReceiver = new BroadcastReceiver() {
+                @Override public void onReceive(android.content.Context context, Intent intent) {
+                    if (trackingStatus != null) {
+                        int count = intent.getIntExtra(TrackingProcessor.EXTRA_PACKET_COUNT, 0);
+                        trackingStatus.setText("Tracking: receiving Quest packets • " + count + " processed");
+                    }
+                }
+            };
+        }
+        IntentFilter filter = new IntentFilter(TrackingProcessor.ACTION_TRACKING_UPDATED);
+        if (android.os.Build.VERSION.SDK_INT >= 33) registerReceiver(trackingReceiver, filter, RECEIVER_NOT_EXPORTED);
+        else registerReceiver(trackingReceiver, filter);
+        trackingReceiverRegistered = true;
+    }
+
+    @Override protected void onStop() {
+        if (trackingReceiverRegistered) {
+            try { unregisterReceiver(trackingReceiver); } catch (Exception ignored) {}
+            trackingReceiverRegistered = false;
+        }
+        super.onStop();
     }
 
     private void pairQuest() {
