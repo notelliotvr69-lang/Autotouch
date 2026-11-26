@@ -104,7 +104,8 @@ fun VRFlexLauncher(tabState: MutableState<String>) {
         context.getSharedPreferences("vrflex_settings", android.content.Context.MODE_PRIVATE)
     }
     var prediction by remember { mutableFloatStateOf(settings.getFloat("prediction", 33f)) }
-    var armLength by remember { mutableFloatStateOf(settings.getFloat("arm_length", 100f)) }
+    var armLength by remember { mutableFloatStateOf(settings.getFloat("arm_length", 100f).coerceIn(50f, 150f)) }
+    SideEffect { ArmLengthConfig.factor = armLength / 100f }
     var profileEnabled by remember { mutableStateOf(settings.getBoolean("profile_enabled", true)) }
     var sittingMode by remember { mutableStateOf(settings.getBoolean("sitting_mode", false)) }
 
@@ -229,9 +230,10 @@ fun VRFlexLauncher(tabState: MutableState<String>) {
                     Text("${armLength.toInt()}%", color = FlexText, fontSize = 24.sp, fontWeight = FontWeight.Bold)
                     Slider(value = armLength, onValueChange = {
                         armLength = it
+                        ArmLengthConfig.factor = it / 100f
                         settings.edit().putFloat("arm_length", it).apply()
-                    }, valueRange = 0f..200f)
-                    Text("Saved as a profile value on the Quest. It does not currently change controller positions in other games.", color = FlexMuted, fontSize = 10.sp)
+                    }, valueRange = 50f..150f)
+                    Text("Live tracked-hand reach adjustment in VRFlex only. Other standalone games keep their own tracking.", color = FlexMuted, fontSize = 10.sp)
                 }
             }
             Text("LEFT Y • MOD MENU     LEFT MENU • GAMES", color = FlexOrange, fontSize = 9.sp, fontWeight = FontWeight.Bold)
