@@ -235,9 +235,14 @@ public class MainActivity extends Activity {
         if (trackingReceiver == null) {
             trackingReceiver = new BroadcastReceiver() {
                 @Override public void onReceive(android.content.Context context, Intent intent) {
-                    if (trackingStatus != null) {
-                        int count = intent.getIntExtra(TrackingProcessor.EXTRA_PACKET_COUNT, 0);
-                        trackingStatus.setText("Tracking: receiving Quest packets • " + count + " processed");
+                    String action = intent.getAction();
+                    if (TrackingProcessor.ACTION_TRACKING_UPDATED.equals(action)) {
+                        if (trackingStatus != null) {
+                            int count = intent.getIntExtra(TrackingProcessor.EXTRA_PACKET_COUNT, 0);
+                            trackingStatus.setText("Tracking: receiving Quest packets • " + count + " processed");
+                        }
+                    } else if (HostService.ACTION_HOST_STATUS.equals(action) && status != null) {
+                        status.setText(intent.getStringExtra(HostService.EXTRA_HOST_STATUS));
                     }
                 }
             };
@@ -252,6 +257,7 @@ public class MainActivity extends Activity {
                     : "Tracking: last seen " + ageSeconds + "s ago • " + lastCount + " packets");
         }
         IntentFilter filter = new IntentFilter(TrackingProcessor.ACTION_TRACKING_UPDATED);
+        filter.addAction(HostService.ACTION_HOST_STATUS);
         if (android.os.Build.VERSION.SDK_INT >= 33) registerReceiver(trackingReceiver, filter, RECEIVER_NOT_EXPORTED);
         else registerReceiver(trackingReceiver, filter);
         trackingReceiverRegistered = true;
