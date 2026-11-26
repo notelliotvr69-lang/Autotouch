@@ -41,34 +41,38 @@ object PhoneHostStreamClient {
         videoSocket = DatagramSocket(4768).apply { soTimeout = 500 }
         audioSocket = DatagramSocket(4767).apply { soTimeout = 500 }
         poseSocket = DatagramSocket()
+        outputSurface?.let { createDecoder(it) }
         Thread(::receiveVideo, "VRFlex-Video-RX").start()
         Thread(::receiveAudio, "VRFlex-Audio-RX").start()
     }
 
     @Synchronized
     fun attachSurface(surface: Surface) {
+        if (outputSurface !== surface) {
+            try { outputSurface?.release() } catch (_: Exception) {}
+        }
         outputSurface = surface
-        try {
-            decoder?.stop()
-            decoder?.release()
-        } catch (_: Exception) {}
+        createDecoder(surface)
+    }
+
+    private fun createDecoder(surface: Surface) {
+        try { decoder?.stop(); decoder?.release() } catch (_: Exception) {}
         decoder = try {
             val format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, 1280, 720)
             MediaCodec.createDecoderByType(MediaFormat.MIMETYPE_VIDEO_AVC).apply {
                 configure(format, surface, null, 0)
                 start()
             }
-        } catch (_: Exception) {
-            null
-        }
+        } catch (_: Exception) { null }
     }
 
     @Synchronized
     fun detachSurface() {
-        outputSurface = null
         try { decoder?.stop() } catch (_: Exception) {}
         try { decoder?.release() } catch (_: Exception) {}
         decoder = null
+        try { outputSurface?.release() } catch (_: Exception) {}
+        outputSurface = null
     }
 
     fun sendTracking(head: FloatArray, left: FloatArray, right: FloatArray, buttons: Int) {
@@ -198,7 +202,9 @@ object PhoneHostStreamClient {
         videoSocket = null
         audioSocket = null
         poseSocket = null
-        detachSurface()
+        try { decoder?.stop() } catch (_: Exception) {}
+        try { decoder?.release() } catch (_: Exception) {}
+        decoder = null
         try { audioTrack?.stop(); audioTrack?.release() } catch (_: Exception) {}
         audioTrack = null
         hostAddress = null
