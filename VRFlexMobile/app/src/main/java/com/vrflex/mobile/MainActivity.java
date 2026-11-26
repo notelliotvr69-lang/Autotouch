@@ -242,6 +242,15 @@ public class MainActivity extends Activity {
                 }
             };
         }
+        android.content.SharedPreferences trackingPrefs = getSharedPreferences("vrflex_tracking", MODE_PRIVATE);
+        int lastCount = trackingPrefs.getInt("last_packet_count", 0);
+        long lastAt = trackingPrefs.getLong("last_packet_at", 0L);
+        if (trackingStatus != null && lastAt > 0L) {
+            long ageSeconds = Math.max(0L, (System.currentTimeMillis() - lastAt) / 1000L);
+            trackingStatus.setText(ageSeconds < 3
+                    ? "Tracking: receiving Quest packets • " + lastCount + " processed"
+                    : "Tracking: last seen " + ageSeconds + "s ago • " + lastCount + " packets");
+        }
         IntentFilter filter = new IntentFilter(TrackingProcessor.ACTION_TRACKING_UPDATED);
         if (android.os.Build.VERSION.SDK_INT >= 33) registerReceiver(trackingReceiver, filter, RECEIVER_NOT_EXPORTED);
         else registerReceiver(trackingReceiver, filter);
