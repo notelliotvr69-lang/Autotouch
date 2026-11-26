@@ -87,11 +87,28 @@ class VRFlexInputSystem(
             adjustHand(body.rightHand, headPosition, rightPose)
         }
 
-        val leftController = body.leftHand.tryGetComponent<Controller>() ?: return
-        if ((leftController.buttonState and leftController.changedButtons and ButtonBits.ButtonY) != 0) {
+        val head = body.head.tryGetComponent<Transform>()?.transform?.t ?: Vector3(0f, 0f, 0f)
+        val left = body.leftHand.tryGetComponent<Transform>()?.transform?.t ?: head
+        val right = body.rightHand.tryGetComponent<Transform>()?.transform?.t ?: head
+        val leftController = body.leftHand.tryGetComponent<Controller>()
+        val rightController = body.rightHand.tryGetComponent<Controller>()
+        val buttons = (leftController?.buttonState ?: 0) or (rightController?.buttonState ?: 0)
+
+        // Send current tracked positions and button state to the phone host.
+        // This is telemetry only; Android does not inject it into arbitrary apps.
+        PhoneHostStreamClient.sendTracking(
+            floatArrayOf(head.x, head.y, head.z),
+            floatArrayOf(left.x, left.y, left.z),
+            floatArrayOf(right.x, right.y, right.z),
+            buttons
+        )
+
+        if (leftController != null &&
+            (leftController.buttonState and leftController.changedButtons and ButtonBits.ButtonY) != 0) {
             onToggleModMenu()
         }
-        if ((leftController.buttonState and leftController.changedButtons and ButtonBits.ButtonMenu) != 0) {
+        if (leftController != null &&
+            (leftController.buttonState and leftController.changedButtons and ButtonBits.ButtonMenu) != 0) {
             onOpenGameSwitcher()
         }
     }
