@@ -97,7 +97,7 @@ object PhoneHostStreamClient {
         val socket = videoSocket ?: return
         val frames = TreeMap<Int, FrameParts>()
         val buffer = ByteArray(1500)
-        while (running.get()) {
+        while (running.get() && !socket.isClosed) {
             try {
                 val packet = DatagramPacket(buffer, buffer.size)
                 socket.receive(packet)
