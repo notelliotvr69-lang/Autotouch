@@ -26,6 +26,8 @@ public final class HostService extends Service {
     public static final String ACTION_STOP="com.vrflex.mobile.STOP_HOST";
     public static final String EXTRA_RESULT_CODE="result_code";
     public static final String EXTRA_RESULT_DATA="result_data";
+    public static final String ACTION_HOST_STATUS="com.vrflex.mobile.HOST_STATUS";
+    public static final String EXTRA_HOST_STATUS="host_status";
     private static final int NOTIFICATION_ID=4765;
     private final AtomicBoolean running=new AtomicBoolean(false);
     private ServerSocket controlServer;
@@ -225,7 +227,12 @@ public final class HostService extends Service {
         Notification.Builder b=Build.VERSION.SDK_INT>=26?new Notification.Builder(this,"vrflex_host"):new Notification.Builder(this);
         return b.setContentTitle("VRFlex Mobile host").setContentText(text).setSmallIcon(android.R.drawable.presence_video_online).setOngoing(true).build();
     }
-    private void updateNotification(String text){if(Build.VERSION.SDK_INT>=26)getSystemService(NotificationManager.class).notify(NOTIFICATION_ID,notification(text));}
+    private void updateNotification(String text){
+        if(Build.VERSION.SDK_INT>=26)getSystemService(NotificationManager.class).notify(NOTIFICATION_ID,notification(text));
+        Intent status=new Intent(ACTION_HOST_STATUS).setPackage(getPackageName());
+        status.putExtra(EXTRA_HOST_STATUS,text);
+        sendBroadcast(status);
+    }
     private String safe(Exception e){return e.getMessage()==null?e.getClass().getSimpleName():e.getMessage();}
     @Override public void onDestroy(){
         running.set(false);
