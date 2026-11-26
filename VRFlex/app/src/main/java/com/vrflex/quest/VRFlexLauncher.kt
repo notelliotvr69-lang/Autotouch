@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -14,6 +16,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import android.content.Intent
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -35,6 +38,25 @@ fun VRFlexLauncher() {
     var prediction by remember { mutableFloatStateOf(settings.getFloat("prediction", 33f)) }
     var armLength by remember { mutableFloatStateOf(settings.getFloat("arm_length", 100f)) }
     var launchStatus by remember { mutableStateOf("Ready") }
+    var installedApps by remember { mutableStateOf(emptyList<InstalledVrApp>()) }
+    fun refreshLibrary() {
+        val intents = listOf(
+            Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER),
+            Intent(Intent.ACTION_MAIN).addCategory("com.oculus.intent.category.VR")
+        )
+        installedApps = intents.flatMap { query ->
+            context.packageManager.queryIntentActivities(query, 0).mapNotNull { resolved ->
+                val activity = resolved.activityInfo ?: return@mapNotNull null
+                if (activity.packageName == context.packageName) return@mapNotNull null
+                InstalledVrApp(
+                    label = resolved.loadLabel(context.packageManager).toString(),
+                    packageName = activity.packageName,
+                    activityName = activity.name
+                )
+            }
+        }.distinctBy { it.packageName }.sortedBy { it.label.lowercase() }
+    }
+    LaunchedEffect(Unit) { refreshLibrary() }
     MaterialTheme {
         Column(
             modifier = Modifier.fillMaxSize().background(FlexBlack, RoundedCornerShape(22.dp)).padding(22.dp),
@@ -59,10 +81,33 @@ fun VRFlexLauncher() {
             when (tab) {
                 "GAMES" -> {
                     Text("YOUR LIBRARY", color = FlexMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    GameLaunchButton("GORILLA TAG", "com.AnotherAxiom.GorillaTag") { launchStatus = it }
-                    GameLaunchButton("GILLA", "com.Chase.Gilla") { launchStatus = it }
-                    Text("Choose a game to open it. More installed apps can be added in a later pass.", color = FlexMuted, fontSize = 11.sp)
-                    Text(launchStatus, color = if (launchStatus.startsWith("Could not") || launchStatus.startsWith("Not installed")) FlexOrange else FlexMuted, fontSize = 11.sp)
+                    Button(onClick = { refreshLibrary(); launchStatus = "Library refreshed" }, colors = ButtonDefaults.buttonColors(containerColor = FlexOrange, contentColor = Color.Black)) {
+                        Text("REFRESH LIBRARY", fontWeight = FontWeight.Bold, fontSize = 10.sp)
+                    }
+                    if (installedApps.isEmpty()) {
+                        Text("No launchable apps found yet. Refresh after installing games.", color = FlexMuted, fontSize = 11.sp)
+                    } else {
+                        LazyColumn(verticalArrangement = Arrangement.spacedBy(7.dp), modifier = Modifier.weight(1f)) {
+                            items(installedApps, key = { it.packageName }) { app ->
+                                Button(
+                                    onClick = {
+                                        try {
+                                            val intent = Intent(Intent.ACTION_MAIN).setClassName(app.packageName, app.activityName)
+                                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                            context.startActivity(intent)
+                                            launchStatus = "Opening " + app.label + "…"
+                                        } catch (error: Exception) {
+                                            launchStatus = "Could not open " + app.label + ": " + error.javaClass.simpleName
+                                        }
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = ButtonDefaults.buttonColors(containerColor = FlexPanel, contentColor = FlexText),
+                                    shape = RoundedCornerShape(12.dp)
+                                ) { Text(app.label, fontWeight = FontWeight.Bold) }
+                            }
+                        }
+                    }
+                    Text(launchStatus, color = if (launchStatus.startsWith("Could not")) FlexOrange else FlexMuted, fontSize = 11.sp)
                 }
                 "MOD MENU" -> {
                     Text("CONTROLLER", color = FlexOrange, fontWeight = FontWeight.Bold)
@@ -84,25 +129,8 @@ fun VRFlexLauncher() {
     }
 }
 
-@Composable
-private fun GameLaunchButton(label: String, packageName: String, onStatus: (String) -> Unit) {
-    val context = LocalContext.current
-    Button(
-        onClick = {
-            try {
-                val launch = context.packageManager.getLaunchIntentForPackage(packageName)
-                if (launch != null) {
-                    context.startActivity(launch)
-                    onStatus("Opening $label…")
-                } else {
-                    onStatus("Not installed or launch activity unavailable: $label")
-                }
-            } catch (error: Exception) {
-                onStatus("Could not open $label: ${error.javaClass.simpleName}")
-            }
-        },
-        modifier = Modifier.fillMaxWidth(),
-        colors = ButtonDefaults.buttonColors(containerColor = FlexPanel, contentColor = FlexText),
-        shape = RoundedCornerShape(12.dp)
-    ) { Text(label, fontWeight = FontWeight.Bold) }
-}
+private data class InstalledVrApp(
+    val label: String,
+    val packageName: String,
+    val activityName: String
+)
