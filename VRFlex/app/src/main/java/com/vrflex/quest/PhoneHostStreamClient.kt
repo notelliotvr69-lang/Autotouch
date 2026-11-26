@@ -119,7 +119,7 @@ object PhoneHostStreamClient {
                         }
                     }
                     frames.remove(sequence)
-                    decode(bytes)
+                    decode(bytes, sequence == -1)
                 }
                 while (frames.size > 8) frames.pollFirstEntry()
             } catch (_: SocketTimeoutException) {
@@ -129,7 +129,7 @@ object PhoneHostStreamClient {
         }
     }
 
-    private fun decode(bytes: ByteArray) {
+    private fun decode(bytes: ByteArray, codecConfig: Boolean) {
         val codec = decoder ?: return
         try {
             val inputIndex = codec.dequeueInputBuffer(0)
@@ -138,7 +138,7 @@ object PhoneHostStreamClient {
                 input.clear()
                 if (bytes.size <= input.remaining()) {
                     input.put(bytes)
-                    codec.queueInputBuffer(inputIndex, 0, bytes.size, System.nanoTime() / 1000L, 0)
+                    codec.queueInputBuffer(inputIndex, 0, bytes.size, System.nanoTime() / 1000L, if (codecConfig) MediaCodec.BUFFER_FLAG_CODEC_CONFIG else 0)
                 } else {
                     codec.queueInputBuffer(inputIndex, 0, 0, System.nanoTime() / 1000L, 0)
                 }
