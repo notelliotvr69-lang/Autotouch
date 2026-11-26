@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -18,6 +19,12 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.*
+import androidx.compose.ui.viewinterop.AndroidView
+import android.graphics.SurfaceTexture
+import android.view.Surface
+import android.view.TextureView
+import android.os.Handler
+import android.os.Looper
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -39,10 +46,7 @@ private val FlexText = Color(0xFFF4F4F5)
 private val FlexMuted = Color(0xFFAAAAB2)
 
 /**
- * Small TCP control channel for the phone-host protocol.
- * Protocol: one JSON object per line; phone answers HELLO with
- * {"type":"welcome","protocol":1}, and accepts {"type":"launch","game":"..."}.
- * Video/pose transport is a later milestone; this is not a streamer yet.
+ * TCP control channel plus UDP media client for the phone-host protocol.
  */
 private object PhoneHostLink {
     private var socket: Socket? = null
@@ -68,7 +72,8 @@ private object PhoneHostLink {
         socket = candidate
         input = reader
         output = writer
-        return "Connected to VRFlex Mobile"
+        PhoneHostStreamClient.start(host.trim())
+        return "Connected • video/audio receivers started"
     }
 
     @Synchronized
@@ -85,6 +90,7 @@ private object PhoneHostLink {
     @Synchronized
     fun disconnect() {
         try { socket?.close() } catch (_: Exception) {}
+        PhoneHostStreamClient.stop()
         socket = null
         input = null
         output = null
@@ -116,10 +122,12 @@ fun VRFlexLauncher(tabState: MutableState<String>) {
             val result = try { action() } catch (error: Exception) {
                 "Connection failed: ${error.message ?: error.javaClass.simpleName}"
             }
-            if (result.startsWith("Connection failed")) connected = false
-            else if (result.startsWith("Connected")) connected = true
-            connectionStatus = result
-            busy = false
+            Handler(Looper.getMainLooper()).post {
+                if (result.startsWith("Connection failed")) connected = false
+                else if (result.startsWith("Connected")) connected = true
+                connectionStatus = result
+                busy = false
+            }
         }.start()
     }
 
@@ -198,7 +206,25 @@ fun VRFlexLauncher(tabState: MutableState<String>) {
                             shape = RoundedCornerShape(12.dp)
                         ) { Text("REQUEST • $game", fontWeight = FontWeight.Bold) }
                     }
-                    Text("The phone host must implement protocol v1 on TCP port 4765. Video streaming and tracking return are not implemented yet.", color = FlexMuted, fontSize = 10.sp)
+                    val streamView = remember(context) { TextureView(context) }
+                    DisposableEffect(streamView) {
+                        streamView.surfaceTextureListener = object : TextureView.SurfaceTextureListener {
+                            override fun onSurfaceTextureAvailable(surface: SurfaceTexture, width: Int, height: Int) {
+                                PhoneHostStreamClient.attachSurface(Surface(surface))
+                            }
+                            override fun onSurfaceTextureSizeChanged(surface: SurfaceTexture, width: Int, height: Int) {}
+                            override fun onSurfaceTextureDestroyed(surface: SurfaceTexture): Boolean {
+                                PhoneHostStreamClient.detachSurface()
+                                return true
+                            }
+                            override fun onSurfaceTextureUpdated(surface: SurfaceTexture) {}
+                        }
+                        if (streamView.isAvailable) streamView.surfaceTexture?.let { PhoneHostStreamClient.attachSurface(Surface(it)) }
+                        onDispose { PhoneHostStreamClient.detachSurface() }
+                    }
+                    Text("LIVE PHONE DISPLAY", color = FlexOrange, fontWeight = FontWeight.Bold, fontSize = 10.sp)
+                    AndroidView(factory = { streamView }, modifier = Modifier.fillMaxWidth().height(150.dp))
+                    Text("H.264 video + PCM audio receivers are active while connected. Tracking telemetry is sent back to the phone; this display is currently a flat 2D stream.", color = FlexMuted, fontSize = 10.sp)
                 }
                 "MOD MENU" -> {
                     Text("PROFILE", color = FlexOrange, fontWeight = FontWeight.Bold)
