@@ -94,6 +94,7 @@ public final class HostService extends Service {
                 if("hello".equals(type)){
                     out.write(new org.json.JSONObject().put("type","welcome").put("protocol",1).put("video_port",4768).put("audio_port",4767).put("pose_port",4766).put("video_codec","h264").put("video_width",1280).put("video_height",720).toString());out.newLine();out.flush();
                     sendCodecConfig();
+                    updateNotification("Quest connected • H.264 video and PCM audio stream active");
                 }else if("launch".equals(type)){
                     String game=msg.optString("game");
                     String pkg=msg.optString("package");
@@ -109,6 +110,7 @@ public final class HostService extends Service {
             if(activeClient==socket){
                 activeClient=null;
                 clientAddress=null;
+                if(running.get())updateNotification("Host ready • waiting for Quest connection");
             }
         }
     }
