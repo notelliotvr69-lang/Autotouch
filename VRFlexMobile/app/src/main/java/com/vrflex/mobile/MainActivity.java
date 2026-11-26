@@ -30,6 +30,7 @@ public class MainActivity extends Activity {
 
         TextView title=new TextView(this); title.setText("VRFLEX MOBILE"); title.setTextSize(27); title.setTextColor(orange); title.setTypeface(null,Typeface.BOLD); root.addView(title);
         TextView subtitle=new TextView(this); subtitle.setText("QUEST ADB • WIRELESS DEBUGGING"); subtitle.setTextColor(muted); subtitle.setTextSize(12); subtitle.setPadding(0,5,0,18); root.addView(subtitle);
+        addPhoneHostCheck(root);
         TextView help=new TextView(this); help.setText("Connect your phone and Quest to the same Wi-Fi network. On Quest, open Settings → System → Developer → Wireless Debugging."); help.setTextColor(white); help.setTextSize(15); help.setPadding(0,0,0,16); root.addView(help);
 
         host = field("Quest IP address", "quest_ip"); root.addView(host);
@@ -50,6 +51,60 @@ public class MainActivity extends Activity {
         TextView safety=new TextView(this); safety.setText("This build pairs with the Quest using Android Wireless Debugging and only runs read-only device-property checks. It does not root the headset, edit firmware, change system settings, or add a Universal Menu control. Pairing code is used only for the pairing attempt and is not saved."); safety.setTextColor(muted); safety.setTextSize(12); safety.setPadding(0,22,0,0); root.addView(safety);
         setContentView(scroll);
         host.setText(getPreferences(0).getString("quest_ip",""));
+    }
+
+
+    private void addPhoneHostCheck(LinearLayout root) {
+        TextView heading = new TextView(this);
+        heading.setText("PHONE XR HOST CHECK");
+        heading.setTextColor(orange);
+        heading.setTypeface(null, Typeface.BOLD);
+        heading.setTextSize(15);
+        heading.setPadding(0, 18, 0, 6);
+        root.addView(heading);
+
+        StringBuilder report = new StringBuilder();
+        report.append("Device: ").append(android.os.Build.MANUFACTURER).append(" ")
+              .append(android.os.Build.MODEL).append("\n");
+        report.append("Android: ").append(android.os.Build.VERSION.RELEASE)
+              .append(" (API ").append(android.os.Build.VERSION.SDK_INT).append(")\n");
+        report.append("CPU ABI: ");
+        String[] abis = android.os.Build.SUPPORTED_ABIS;
+        for (int i = 0; i < abis.length; i++) {
+            if (i > 0) report.append(", ");
+            report.append(abis[i]);
+        }
+        report.append("\n");
+
+        boolean vulkan = false;
+        boolean vulkanVersion = false;
+        for (android.content.pm.FeatureInfo feature : getPackageManager().getSystemAvailableFeatures()) {
+            if (feature == null || feature.name == null) continue;
+            if (feature.name.equals("android.hardware.vulkan.level")) vulkan = true;
+            if (feature.name.equals("android.hardware.vulkan.version")) vulkanVersion = true;
+        }
+        report.append("Vulkan hardware feature: ").append(vulkan ? "present" : "not reported").append("\n");
+        report.append("Vulkan version feature: ").append(vulkanVersion ? "present" : "not reported").append("\n");
+
+        boolean xrBroker = false;
+        try {
+            xrBroker = getPackageManager().resolveContentProvider("org.khronos.openxr.runtime_broker", 0) != null
+                    || getPackageManager().resolveContentProvider("org.khronos.openxr.system_runtime_broker", 0) != null;
+        } catch (Exception ignored) {}
+        report.append("OpenXR runtime broker: ").append(xrBroker ? "provider found" : "not found").append("\n\n");
+        if (xrBroker) {
+            report.append("A broker was detected, but this alone does not prove Quest-game compatibility. Runtime extensions and headset tracking still need testing.");
+        } else {
+            report.append("No Android OpenXR runtime broker is exposed. Quest games that require Meta's OpenXR runtime cannot run as VR games on this phone just by installing their APKs. Vulkan support alone cannot replace the Quest runtime.");
+        }
+
+        TextView result = new TextView(this);
+        result.setText(report.toString());
+        result.setTextColor(white);
+        result.setTextSize(13);
+        result.setPadding(14, 14, 14, 14);
+        result.setBackground(round(panel, orange));
+        root.addView(result, new LinearLayout.LayoutParams(-1, -2));
     }
 
     private EditText field(String hint, String preference) {
