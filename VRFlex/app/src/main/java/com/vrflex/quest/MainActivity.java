@@ -125,8 +125,8 @@ public class MainActivity extends Activity {
         toggle("Sitting mode","Saved preference for a compatible seated-mode integration.","sitting",false);
         slider("Forward / backward offset","offset",-100,100,0," cm");
         slider("Movement speed","speed",1,100,25,"%");
-        slider("Left arm length","left_arm",-50,50,0,"%");
-        slider("Right arm length","right_arm",-50,50,0,"%");
+        slider("Controller prediction","prediction",0,200,33,"");
+        slider("Shared arm length","arm_length",0,200,100,"%");
     }
     private void showTab(int tab) {
         content.removeAllViews();
@@ -171,8 +171,8 @@ public class MainActivity extends Activity {
             Button back=new Button(this);back.setText("Back to game library");back.setTextColor(text);back.setBackground(shape(Color.rgb(35,35,35),12));back.setOnClickListener(v->showTab(0));content.addView(back);
         } else if(tab==2){
             card("Arm settings",gameName()+" profile");
-            slider("Left arm length","left_arm",-50,50,0,"%");
-            slider("Right arm length","right_arm",-50,50,0,"%");
+            slider("Controller prediction","prediction",0,200,33,"");
+            slider("Shared arm length","arm_length",0,200,100,"%");
             card("SHORTCUTS","Left Y opens Mod Menu; left Menu (☰) opens Games when the active integration exposes those inputs.");
         } else {
             card("General","VRFlex preferences are stored locally on this headset.");
