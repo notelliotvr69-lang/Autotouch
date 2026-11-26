@@ -2,6 +2,7 @@ package com.vrflex.mobile;
 
 import android.app.*;
 import android.content.*;
+import android.content.pm.ServiceInfo;
 import android.hardware.display.DisplayManager;
 import android.hardware.display.VirtualDisplay;
 import android.media.*;
