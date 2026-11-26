@@ -23,11 +23,18 @@ import com.meta.spatial.toolkit.QuadShapeOptions
 import com.meta.spatial.vr.VRFeature
 
 class ImmersiveActivity : AppSystemActivity() {
+    private var panelVisible = true
+
+    private fun togglePanel() {
+        panelVisible = !panelVisible
+        Entity(R.id.vrflex_main_panel).setComponent(Visible(panelVisible))
+    }
     override fun registerFeatures(): List<SpatialFeature> =
         listOf(VRFeature(this), ComposeFeature())
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        systemManager.registerSystem(VRFlexInputSystem(::togglePanel))
     }
 
     override fun onSceneReady() {
@@ -66,7 +73,7 @@ class ImmersiveActivity : AppSystemActivity() {
         Entity.create(listOf(
             Panel(panelRegistrationId = R.id.vrflex_main_panel),
             Transform(Pose(Vector3(0f, 0.05f, -1.65f))),
-            Visible(true)
+            Visible(panelVisible)
         ))
     }
 
