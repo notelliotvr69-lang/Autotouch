@@ -1,23 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:metavr="http://schemas.meta.com/metavr-sdk">
-    <metavr:uses-metavr-sdk metavr:minSdkVersion="69" metavr:targetSdkVersion="207" />
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:horizonos="http://schemas.horizonos/sdk" android:installLocation="auto">
+    <horizonos:uses-horizonos-sdk horizonos:minSdkVersion="69" horizonos:targetSdkVersion="69" />
+    <uses-feature android:name="android.hardware.vr.headtracking" android:required="true" />
+    <uses-feature android:glEsVersion="0x00030001" />
     <uses-permission android:name="android.permission.INTERNET" />
-    <queries><intent><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent></queries>
-    <uses-feature android:name="android.hardware.vr.headtracking" android:version="1" android:required="false" />
-    <application android:allowBackup="true" android:label="VRFlex" android:theme="@android:style/Theme.Material.NoActionBar" android:resizeableActivity="true">
+    <application android:allowBackup="false" android:label="VRFlex" android:theme="@android:style/Theme.Material.NoActionBar">
         <meta-data android:name="com.oculus.supportedDevices" android:value="quest2|questpro|quest3|quest3s" />
-        <activity android:name=".MainActivity" android:exported="true" android:screenOrientation="landscape" android:resizeableActivity="true">
-            <layout android:defaultWidth="1000dp" android:defaultHeight="720dp" android:minWidth="600dp" android:minHeight="420dp" />
+        <meta-data android:name="com.oculus.vr.focusaware" android:value="true" />
+        <activity android:name=".ImmersiveActivity" android:launchMode="singleTask" android:excludeFromRecents="false" android:configChanges="screenSize|screenLayout|orientation|keyboardHidden|keyboard|navigation|uiMode" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
+                <category android:name="com.oculus.intent.category.VR" />
                 <category android:name="android.intent.category.LAUNCHER" />
-                <category android:name="com.oculus.intent.category.2D" />
-            </intent-filter>
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="com.oculus.intent.category.2D" />
-                <category android:name="com.oculus.intent.category.OVERLAY_LAUNCHER" />
             </intent-filter>
         </activity>
     </application>
