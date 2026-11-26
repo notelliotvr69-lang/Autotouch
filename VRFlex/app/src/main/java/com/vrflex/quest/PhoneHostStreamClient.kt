@@ -176,7 +176,7 @@ object PhoneHostStreamClient {
         } catch (_: Exception) { null } ?: return
 
         val buffer = ByteArray(1500)
-        while (running.get()) {
+        while (running.get() && !socket.isClosed) {
             try {
                 val packet = DatagramPacket(buffer, buffer.size)
                 socket.receive(packet)
