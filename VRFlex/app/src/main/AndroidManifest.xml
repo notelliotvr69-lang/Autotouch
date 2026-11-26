@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:horizonos="http://schemas.horizonos/sdk" android:installLocation="auto">
+    <queries>
+        <package android:name="com.AnotherAxiom.GorillaTag" />
+        <package android:name="com.Chase.Gilla" />
+    </queries>
     <horizonos:uses-horizonos-sdk horizonos:minSdkVersion="69" horizonos:targetSdkVersion="69" />
     <uses-feature android:name="android.hardware.vr.headtracking" android:required="true" />
     <uses-feature android:glEsVersion="0x00030001" />
