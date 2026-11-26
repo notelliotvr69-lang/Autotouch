@@ -11,7 +11,7 @@ main{max-width:980px;margin:auto}.brand{display:flex;gap:16px;align-items:center
 h1{font-size:clamp(2.8rem,8vw,5rem);letter-spacing:-.06em;line-height:1;margin:0}.hacks{font-family:"Comic Sans MS","Comic Sans",cursive;color:#bd75ff;font-size:1.35rem;font-weight:900;letter-spacing:.08em;text-shadow:0 0 14px #8b35d866;margin-top:5px}.muted{color:var(--muted)}.panel{background:var(--panel);border:1px solid #343434;border-radius:18px;padding:26px;margin:18px 0;box-shadow:0 8px 28px #0009}.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}.tile{background:#1d1d1d;border:1px solid #383838;border-radius:12px;padding:18px}.tile h2{margin:0 0 8px;font-size:1.1rem}.button{display:inline-block;background:var(--accent);border:1px solid var(--accent);color:#080808;text-decoration:none;padding:12px 16px;border-radius:10px;font-weight:850;margin:10px 8px 0 0}.secondary{background:#171717;color:#ff9b22;border-color:#ff8c00}.tag{display:inline-block;border:1px solid #754000;border-radius:8px;padding:7px 11px;margin:4px;color:#ffc078;background:#211407;font-size:.85rem}.notice{border:1px solid #70420c;border-left:5px solid var(--warn);padding:12px 16px;background:#21180d;border-radius:8px;color:#ffe0b0}.good{border:1px solid #754000;border-left:5px solid var(--good);padding:12px 16px;background:#201408;border-radius:8px;color:#ffd2a0}a{color:#ffad4d}footer{padding:10px 2px 30px}
 @media(max-width:680px){body{padding:16px}.grid{grid-template-columns:1fr}.brand{margin-top:12px}}
 </style></head><body><main>
-<div class="brand"><div class="logo">V</div><div><h1>VRFlex</h1><div class="hacks">HACKS</div><div class="muted">Quest game launcher · Per-game profiles · Rootless by design</div></div></div>
+<div class="brand"><div class="logo">V</div><div><h1>VRFlex</h1><div class="hacks">HACKS</div><div class="muted">Phone companion + Quest spatial client prototype · Rootless by design</div></div></div>
 <section class="panel"><h2>One launcher. Separate controls for each game.</h2>
 <p class="muted">VRFlex is a Quest launcher and profile manager. The intended controller layout is simple: left Y opens the Mod Menu, while the left Menu (☰) opens the Games switcher. The Games screen lets you select an installed app, save its profile, and launch it.</p>
 <div><span class="tag">Meta Quest</span><span class="tag">Games switcher: ☰</span><span class="tag">Mod Menu: Y</span><span class="tag">Per-game profiles</span><span class="tag">No root</span></div>
@@ -22,14 +22,15 @@ h1{font-size:clamp(2.8rem,8vw,5rem);letter-spacing:-.06em;line-height:1;margin:0
 <article class="tile"><h2>Automatic profile selection</h2><p class="muted">Launching an app through VRFlex makes that app the active profile. The same profile values are shown in the Games and Mod Menu screens.</p></article>
 <article class="tile"><h2>Rootless by design</h2><p class="muted">No root, bootloader unlocking, firmware flashing, protected partition writes, system APK replacement, or hidden shell commands.</p></article>
 </div></section>
-<section class="panel"><h2>Downloads</h2><p class="muted">Latest spatial Quest build · November 26, 2026. Built for Meta Quest; install as an Android APK.</p>
+<section class="panel"><h2>Downloads</h2><p class="muted">Latest builds · November 26, 2026. Both APKs are Android packages; install the phone companion on your Android phone and the spatial client on Meta Quest 3.</p>
 <a class="button" href="./VRFlex.apk">Download VRFlex for Quest 3</a>
+<a class="button secondary" href="https://github.com/notelliotvr69-lang/Autotouch/releases/download/vrflex-latest/VRFlex-Mobile.apk">Download VRFlex Mobile</a>
 <a class="button secondary" href="https://github.com/notelliotvr69-lang/Autotouch/actions/workflows/vrflex-quest-apk.yml">Build history</a>
 <p class="muted">Build status: <a href="https://github.com/notelliotvr69-lang/Autotouch/actions/workflows/vrflex-apk.yml">Quest APK build workflow</a> · <a href="https://github.com/notelliotvr69-lang/Autotouch/tree/main/VRFlex/OpenXR">OpenXR rebuild notes</a></p>
 </section>
 <section class="panel"><h2>Honest capability status</h2>
 <p class="good">Current spatial prototype: immersive 3D scene, black-and-orange styling, a spatial menu with Games / Mod Menu / Arms sections, game-launch actions, and preview sliders.</p>
-<p class="notice">Prototype limitations: the current APK is a standalone immersive launcher panel. The left-Y shortcut, finger-pointer selection, persistent overlay over other games, and actual cross-game arm-length / controller-prediction changes are not implemented yet. Sliders currently change preview values only; the APK has not yet been tested on a headset.</p>
+<p class="notice">Prototype limitations: the Quest APK is currently a standalone immersive launcher panel, and the phone APK currently provides ADB wireless pairing and device diagnostics. Phone-hosted game execution, live phone-to-Quest video/audio streaming, Quest tracking return, finger-pointer selection, persistent overlays over other games, and actual cross-game arm-length changes are not implemented yet. Sliders currently change saved preview/settings values only; both APKs still need real-device testing.</p>
 </section>
 <footer class="muted">VRFlex is an independent project within the AutoTouch repository. Not affiliated with or endorsed by Meta.</footer>
 </main></body></html>
