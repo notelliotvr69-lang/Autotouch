@@ -152,7 +152,7 @@ public final class HostService extends Service {
                 ByteBuffer data=videoEncoder.getOutputBuffer(index);
                 if(data!=null&&info.size>0){
                     byte[] bytes=new byte[info.size];data.position(info.offset);data.limit(info.offset+info.size);data.get(bytes);
-                    sendFragments(videoSocket,bytes,clientAddress,4768,frame++);
+                    if((info.flags&MediaCodec.BUFFER_FLAG_CODEC_CONFIG)!=0)sendFragments(videoSocket,bytes,clientAddress,4768,-1);else sendFragments(videoSocket,bytes,clientAddress,4768,frame++);
                 }
                 videoEncoder.releaseOutputBuffer(index,false);
             }
