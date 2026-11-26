@@ -1,17 +1,15 @@
-# VRFlex
+# VRFlex for Meta Quest
 
-Standalone Android/Quest project stored inside the AutoTouch repository.
+VRFlex is being migrated from a flat Android activity to an immersive Meta Spatial SDK application.
+
+## Current spatial milestone
+
+- Native Meta Spatial SDK `AppSystemActivity` and VR feature registration.
+- Procedural 3D scene: dark floor, orange architectural accents, and a floating spatial panel.
+- Compose-based black/orange launcher panel with Games, Mod Menu, and Arms sections.
+- Initial shared prediction and arm-length controls are UI prototypes only; they do not yet alter controller tracking in other apps.
+- The in-game Y-button overlay and cross-game tracking integration are later milestones, not part of this first spatial shell.
 
 ## Build
-From this directory, use Gradle 8.9 and Android SDK Platform 35:
 
-```sh
-gradle assembleDebug
-```
-
-APK: `app/build/outputs/apk/debug/app-debug.apk`
-
-## Current status
-The launcher has separate Games (left Menu / ☰) and Mod Menu (left Y) screens. Selecting Launch on an installed app saves that app's profile before starting it; profile settings are available from both screens. Settings persist locally. The button labels describe the intended shortcuts, but this APK does not have a Quest-wide controller listener, so the shortcuts are not yet intercepted inside arbitrary games. Movement and arm controls remain profile values until a compatible game integration applies them. No Guardian, system firmware, or OS modifications are performed.
-
-The project is intentionally separate from the existing AutoTouch and QuestLink projects.
+The Quest APK is built by GitHub Actions using Meta Spatial SDK 0.15.0, Android Gradle Plugin 8.11.1, Kotlin 2.1.0, and Gradle 9.4.1.
