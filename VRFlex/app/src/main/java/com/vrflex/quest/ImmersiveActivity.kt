@@ -5,13 +5,13 @@ import android.os.Bundle
 import androidx.compose.ui.platform.ComposeView
 import com.meta.spatial.compose.ComposeFeature
 import com.meta.spatial.compose.ComposeViewPanelRegistration
+import com.meta.spatial.core.Color4
 import com.meta.spatial.core.Entity
 import com.meta.spatial.core.Pose
 import com.meta.spatial.core.SpatialFeature
 import com.meta.spatial.core.Vector3
 import com.meta.spatial.toolkit.AppSystemActivity
 import com.meta.spatial.toolkit.Box
-import com.meta.spatial.toolkit.Color4
 import com.meta.spatial.toolkit.Material
 import com.meta.spatial.toolkit.Mesh
 import com.meta.spatial.toolkit.Panel
