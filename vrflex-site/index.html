@@ -22,14 +22,14 @@ h1{font-size:clamp(2.8rem,8vw,5rem);letter-spacing:-.06em;line-height:1;margin:0
 <article class="tile"><h2>Automatic profile selection</h2><p class="muted">Launching an app through VRFlex makes that app the active profile. The same profile values are shown in the Games and Mod Menu screens.</p></article>
 <article class="tile"><h2>Rootless by design</h2><p class="muted">No root, bootloader unlocking, firmware flashing, protected partition writes, system APK replacement, or hidden shell commands.</p></article>
 </div></section>
-<section class="panel"><h2>Downloads</h2><p class="muted">Latest Quest build · November 23, 2026. This is a direct Android APK download, not a ZIP archive.</p>
-<a class="button" href="https://github.com/notelliotvr69-lang/Autotouch/releases/download/vrflex-latest/VRFlex.apk">Download latest Quest APK</a>
-<a class="button secondary" href="https://github.com/notelliotvr69-lang/Autotouch/releases/tag/vrflex-latest">Release details</a>
-<p class="muted">Build status: <a href="https://github.com/notelliotvr69-lang/Autotouch/actions/workflows/vrflex-apk.yml">Current prototype APK workflow</a> · <a href="https://github.com/notelliotvr69-lang/Autotouch/tree/main/VRFlex/OpenXR">OpenXR rebuild notes</a></p>
+<section class="panel"><h2>Downloads</h2><p class="muted">Latest spatial Quest build · November 26, 2026. Built for Meta Quest; install as an Android APK.</p>
+<a class="button" href="./VRFlex.apk">Download VRFlex for Quest 3</a>
+<a class="button secondary" href="https://github.com/notelliotvr69-lang/Autotouch/actions/workflows/vrflex-quest-apk.yml">Build history</a>
+<p class="muted">Build status: <a href="https://github.com/notelliotvr69-lang/Autotouch/actions/workflows/vrflex-apk.yml">Quest APK build workflow</a> · <a href="https://github.com/notelliotvr69-lang/Autotouch/tree/main/VRFlex/OpenXR">OpenXR rebuild notes</a></p>
 </section>
 <section class="panel"><h2>Honest capability status</h2>
-<p class="good">Implemented in the current source: black framing, orange controls, Games and Mod Menu screens, installed-app launch actions, and locally saved per-app profiles. Launching through VRFlex selects the app's profile first.</p>
-<p class="notice">Shortcut and overlay status: left Y → Mod Menu and left Menu (☰) → Games are the intended controls. The APK does not yet have a verified Quest-wide controller listener or a universally floating in-game overlay. Quest OS or compatible game integrations must expose those inputs. Profile settings are stored, but only affect gameplay when a compatible integration applies them. Hardware behavior has not yet been verified.</p>
+<p class="good">Current spatial prototype: immersive 3D scene, black-and-orange styling, a spatial menu with Games / Mod Menu / Arms sections, game-launch actions, and preview sliders.</p>
+<p class="notice">Prototype limitations: the current APK is a standalone immersive launcher panel. The left-Y shortcut, finger-pointer selection, persistent overlay over other games, and actual cross-game arm-length / controller-prediction changes are not implemented yet. Sliders currently change preview values only; the APK has not yet been tested on a headset.</p>
 </section>
 <footer class="muted">VRFlex is an independent project within the AutoTouch repository. Not affiliated with or endorsed by Meta.</footer>
 </main></body></html>
