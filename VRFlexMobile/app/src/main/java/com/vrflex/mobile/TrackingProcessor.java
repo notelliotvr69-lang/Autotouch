@@ -34,6 +34,7 @@ public final class TrackingProcessor {
             oy = prefs.getInt("arm_offset_y_cm", 0) / 100.0f;
             oz = prefs.getInt("arm_offset_z_cm", 0) / 100.0f;
 
+            long now = System.currentTimeMillis();
             JSONObject adjusted = new JSONObject()
                 .put("type", "tracking_adjusted")
                 .put("head", vector(hx, hy, hz))
@@ -43,9 +44,10 @@ public final class TrackingProcessor {
                 .put("arm_scale", scale)
                 .put("arm_offset", vector(ox, oy, oz))
                 .put("packet_count", packetCount)
-                .put("timestamp_ms", System.currentTimeMillis());
+                .put("timestamp_ms", now);
 
             latestTracking = adjusted;
+            prefs.edit().putInt("last_packet_count", packetCount).putLong("last_packet_at", now).apply();
             Intent update = new Intent(ACTION_TRACKING_UPDATED);
             update.setPackage(context.getPackageName());
             update.putExtra(EXTRA_TRACKING_JSON, adjusted.toString());
